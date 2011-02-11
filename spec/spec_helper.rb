@@ -39,6 +39,19 @@ def create_project
 	file_copy Glyph::SPEC_DIR/'files/ligature.jpg', Glyph::PROJECT/'images/ligature.jpg'
 end
 
+def create_web_project
+	reset_quiet
+	create_project_dir
+	return if Glyph.lite?
+	Glyph.run! 'project:create', Glyph::PROJECT.to_s
+	file_copy Glyph::SPEC_DIR/'files/web_doc.glyph', Glyph::PROJECT/'document.glyph'
+	(Glyph::PROJECT/'text/a/b').mkpath
+	file_copy Glyph::SPEC_DIR/'files/web1.glyph', Glyph::PROJECT/'text/a/web1.glyph'
+	file_copy Glyph::SPEC_DIR/'files/web2.glyph', Glyph::PROJECT/'text/a/b/web2.glyph'
+	file_copy Glyph::SPEC_DIR/'files/test.sass', Glyph::PROJECT/'styles/test.sass'
+	file_copy Glyph::SPEC_DIR/'files/ligature.jpg', Glyph::PROJECT/'images/ligature.jpg'
+end
+
 def delete_project_dir
 	return unless	Glyph::PROJECT.exist?
 	Glyph::PROJECT.children.each do |f|
@@ -56,6 +69,12 @@ def delete_project
 end
 
 def run_command(cmd)
+	stdout_for do
+		GLI.run cmd
+	end
+end
+
+def stdout_for(&block)
 	out = StringIO.new
 	err = StringIO.new
 	old_stdout = $stdout
@@ -63,7 +82,7 @@ def run_command(cmd)
 	$stdout = out
 	$stderr = err 
 	Glyph['system.quiet'] = false
-	GLI.run cmd
+	block.call
 	Glyph['system.quiet'] = true
 	$stdout = old_stdout
 	$stderr = old_stderr
@@ -71,7 +90,7 @@ def run_command(cmd)
 end
 
 def run_command_successfully(cmd)
-	run_command(cmd).match(/error/) == nil
+	run_command(cmd).match(/error|warning/) == nil
 end
 
 def define_em_macro
@@ -89,7 +108,7 @@ end
 def language(set)
 	reset_quiet
 	Glyph.run 'load:config'
-	Glyph['language.set'] = set
+	Glyph['options.macro_set'] = set
 	Glyph.run 'load:macros'
 end
 
@@ -106,7 +125,7 @@ def create_tree(text)
 end
 
 def create_doc(tree)
-	Glyph::Document.new tree, {} 
+	Glyph::Document.new tree 
 end
 
 def filter(text)

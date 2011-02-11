@@ -1,5 +1,5 @@
 #!/usr/bin/env ruby
-require File.join(File.dirname(__FILE__), "..", "spec_helper")
+# encoding: utf-8
 
 describe "Filter Macros" do
 
@@ -17,10 +17,10 @@ describe "Filter Macros" do
 		text = "textile[This is a _TEST_(TM).]"
 		interpret text
 		@p.document.output.should == "<p>This is a <em><span class=\"caps\">TEST</span></em>&#8482;.</p>"
-		Glyph['filters.target'] = :latex
+		Glyph["output.#{Glyph['document.output']}.filter_target"] = :latex
 		interpret text
 		@p.document.output.should == "This is a \\emph{TEST}\\texttrademark{}.\n\n"
-		Glyph['filters.target'] = :html
+		Glyph["output.#{Glyph['document.output']}.filter_target"] = :html
 		Glyph['filters.redcloth.restrictions'] = [:no_span_caps]
 		interpret text
 		@p.document.output.should == "<p>This is a <em>TEST</em>&#8482;.</p>"
@@ -55,8 +55,9 @@ interpret text
 		code = %{def test_method(a, b)
 				puts a+b
 			end}
-			cr_result = %{<div class=\"CodeRay\"> <div class=\"code\"><pre><span class=\"r\">def</span> 
-			<span class=\"fu\">test_method</span>(a, b) puts a+b <span class=\"r\">end</span></pre></div> </div>}
+			cr_result = %{<div class=\"CodeRay\"> <div class=\"code\"><pre><span class=\"no\">1</span> <span class=\"r\">def</span> <span class=\"fu\">test_method</span>(a, b) 
+				<span class=\"no\">2</span> puts a+b 
+				<span class=\"no\">3</span> <span class=\"r\">end</span></pre></div> </div>}
 			uv_result = %{<pre class=\"iplastic\"><span class=\"Keyword\">def</span> 
 			<span class=\"FunctionName\">test_method</span>(<span class=\"Arguments\">a<span class=\"Arguments\">,</span> b</span>) 
 			puts a<span class=\"Keyword\">+</span>b <span class=\"Keyword\">end</span> </pre>}
@@ -70,6 +71,12 @@ interpret text
 			Glyph['filters.ultraviolet.line_numbers'] = false
 			check.call 'ultraviolet', uv_result if uv
 			check.call 'coderay', cr_result if cr
+	end
+
+	it "textile_section, markdown_section" do
+		output_for("§txt[*test*]").should == "<div class=\"section\">\n<p><strong>test</strong></p>\n\n</div>"
+		output_for("§md[*test*]").should == "<div class=\"section\">\n<p><em>test</em></p>\n\n</div>"
+		output_for("textile_section[@title[test]...]").should == "<div class=\"section\">\n<h2 id=\"h_1\">test</h2>\n<p>&#8230;</p>\n\n</div>"
 	end
 
 

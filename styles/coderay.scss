@@ -1,0 +1,43 @@
+@import "definitions.scss";
+.CodeRay {
+  pre {
+		line-height: 1.2em;
+    margin: 0px;
+		color: #FFF;
+  }
+	.no {
+		font-weight: bold;
+		color: #595959;
+	}
+  .an {
+    color: #E7BE69; }
+  .c {
+    color: #BC9358;
+    font-style: italic; }
+  .ch {
+    color: #509E4F; }
+  .cl, .co {
+    color: #FFF; }
+  .fl {
+    color: #A4C260; }
+  .fu {
+    color: #FFC56D; }
+  .gv {
+    color: #D0CFFE; }
+  .i {
+    color: #A4C260; }
+  .il {}
+  .iv {
+    color: #D0CFFE; }
+  .pp {
+    color: #E7BE69; }
+  .r {
+    color: #CB7832; }
+  .rx, .s {
+    color: #A4C260; }
+  .sy {
+    color: #6C9CBD; }
+  .ta {
+    color: #E7BE69; }
+  .pc {
+    color: #6C9CBD; } }

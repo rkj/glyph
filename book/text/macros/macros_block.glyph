@@ -1,6 +1,3 @@
-section[
-	@title[Block Macros]
-
 	ref_macro[
 		@n[box]
 		@desc[Creates a titled box (@<div>@ tag).]
@@ -66,6 +63,14 @@ img[
 	]
 
 	ref_macro[
+		@n[navigation]
+		@desc[Displays links to the document's TOC and the previous/next topic (used only in =>[#layouts|layouts]). ]
+		@params[
+			-p[0|The ID of the current topic.]
+		]
+	]
+
+	ref_macro[
 		@n[note]
 		@desc[Creates a note @div@ containing the value.]
 		@aliases[important, caution, tip]
@@ -96,4 +101,3 @@ img[
 		@desc[Renders the title of the document (based on the $>[document.title]) within a @<h1>@ tag.]
 		@example[=title[]=]
 	]
-]

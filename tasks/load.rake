@@ -1,9 +1,29 @@
 #!/usr/bin/env ruby
 
 namespace :load do
+	include Glyph::Utils
 
 	desc "Load all files"
-	task :all => [:config, :snippets, :macros] do
+	task :all => [:config, :tasks, :commands, :snippets, :macros] do
+	end
+
+	desc "Load tasks"
+	task :tasks do
+		unless Glyph.lite? then
+			load_files_from_dir(Glyph::PROJECT/'lib/tasks', '.rake') do |f, contents|
+				load f
+			end	
+		end
+	end
+
+	desc "Load commands"
+	task :commands do
+		unless Glyph.lite? then
+			include GLI if (Glyph::PROJECT/'lib/commands').exist?
+			load_files_from_dir(Glyph::PROJECT/'lib/commands', '.rb') do |f, contents|
+				require f
+			end
+		end
 	end
 
 	desc "Load snippets"
@@ -20,18 +40,23 @@ namespace :load do
 	task :macros do
 		raise RuntimeError, "The current directory is not a valid Glyph project" unless Glyph.project? || Glyph.lite?
 		load_macros_from_dir = lambda do |dir|
-			if dir.exist? then
-				dir.children.each do |c|
-					Glyph.instance_eval file_load(c) unless c.directory?
-				end
+			load_files_from_dir(dir, ".rb") do |file, contents|
+				Glyph.instance_eval contents
 			end
 		end
-		case  Glyph['language.set']
+		load_layouts_from_dir = lambda do |dir|
+			load_files_from_dir(dir, ".glyph") do |file, contents|
+				Glyph.define "layout/#{file.basename(file.extname)}".to_sym, contents
+			end
+		end
+		out_cfg = "output.#{Glyph['document.output']}"
+		reps_file = "#{Glyph["#{out_cfg}.macro_reps"]}.rb"
+		case  Glyph['options.macro_set']
 		when 'glyph' then
-			Glyph.instance_eval file_load(Glyph::HOME/'macros/core.rb')
-			Glyph.instance_eval file_load(Glyph::HOME/'macros/filters.rb')
-			Glyph.instance_eval file_load(Glyph::HOME/'macros/xml.rb')
-			load_macros_from_dir.call Glyph::HOME/"macros"/Glyph["filters.target"].to_s
+			load_macros_from_dir.call Glyph::HOME/"macros"
+			# Load representations
+			Glyph.instance_eval file_load(Glyph::HOME/"macros/reps/#{reps_file}")
+			load_layouts_from_dir.call Glyph::HOME/"layouts/#{Glyph["#{out_cfg}.layout_dir"]}"
 		when 'xml' then
 			Glyph.instance_eval file_load(Glyph::HOME/'macros/core.rb') 
 			Glyph.instance_eval file_load(Glyph::HOME/'macros/filters.rb') 
@@ -45,6 +70,8 @@ namespace :load do
 		# load project macros
 		unless Glyph.lite? then
 			load_macros_from_dir.call Glyph::PROJECT/"lib/macros"
+			Glyph.instance_eval file_load(Glyph::PROJECT/"lib/macros/reps/#{reps_file}") rescue nil
+			load_layouts_from_dir.call Glyph::PROJECT/'lib/layouts' if Glyph.multiple_output_files?
 		end
 	end
 

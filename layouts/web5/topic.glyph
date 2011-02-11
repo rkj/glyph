@@ -1,0 +1,17 @@
+document[
+	head[
+		style[default.css]
+	]
+	body[
+		@class[topic]
+		xml/article[
+			section[
+				@title[{{title}}]
+				@id[{{id}}]
+				navigation[{{id}}]
+{{contents}}
+				navigation[{{id}}]
+			]
+		]
+	]
+]

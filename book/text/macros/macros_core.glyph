@@ -1,5 +1,3 @@
-section[
-	@title[Core Macros]
 
 	ref_macro[
 		@n[alias]
@@ -67,7 +65,7 @@ For examples see any of the following:
 		@remarks[&[unsafe]]
 		@params[
 			-p[0|The full name of a configuration setting.]	
-			-p[0|The new value of the configuration setting]	
+			-p[1|The new value of the configuration setting]	
 		]
 	]
 	
@@ -99,7 +97,7 @@ Evaluates to the contents of a text file stored in the @text/@ directory referen
 				li[&[unsafe]]
 				li[@.glyph@ is assumed if no file extension is specified.]
 				li[
-This macro can also be used to include @.rb@ ruby files within the @lib@ directory. File contents are evaluated in the context of the =>[&[yardoc]/Glyph|Glyph] module.
+This macro can also be used to include @.rb@ ruby files within the @lib@ directory. File contents are evaluated in the context of the =>[&[rubydoc]/Glyph|Glyph] module.
 				]
 			]
 		]
@@ -144,6 +142,15 @@ Checks a string against a regular expression.
 	]
 
 	ref_macro[
+		@n[output?]
+		@desc[Evaluates to true if Glyph is generating output in the specified format(s).]
+		@example[=?[output?[web\|web5]\|This text is printed only when generating web or web5 output.]=]
+		@params[
+			-p[0, ...|a valid output target.]
+		]
+	]
+
+	ref_macro[
 		@n[or]
 		@desc[Conditional @or@ operator, to be used with the %>[condition].]
 		@example[=?[or[true\|false]\|This is always displayed.]=]
@@ -176,7 +183,7 @@ rw:[release\|
 
 	ref_macro[
 		@n[ruby]
-		@desc[Evaluates its value as Ruby code within the context of the =>[&[yardoc]/Glyph|Glyph] module.]
+		@desc[Evaluates its value as Ruby code within the context of the =>[&[rubydoc]/Glyph|Glyph] module.]
 		@aliases[%]
 		@examples[=
 %[Time.now]
@@ -205,4 +212,3 @@ rw:[release\|
 			-p[1|The contents of the new snippet.]
 		]
 	]
-]

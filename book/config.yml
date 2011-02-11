@@ -1,11 +1,23 @@
 --- 
 :document: 
   :output: html
-  :title: Glyph
   :subtitle: Rapid Document Authoring Framework
   :author: Fabio Cevasco
-  :revision: "v0.3.0"
-  :filename: glyph
   :draft: true
-:filters:
-  :highlighter: ultraviolet
+  :revision: v0.4.2
+  :filename: glyph
+  :title: Glyph
+  :styles: link
+:output: 
+  :h3rald: 
+    :multifile: true
+    :extension: '.html'
+    :filter_target: 'html'
+    :base: '/glyph/book/'
+    :macro_dirs: ['html', 'html5']
+    :layout_dirs: ['web5']
+    :layouts: 
+      :topic: bookpage
+      :index: bookindex
+  :pdf: 
+    :generator: prince

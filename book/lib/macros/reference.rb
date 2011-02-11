@@ -22,16 +22,15 @@ macro :ref_error do
 end
 
 macro :"%>" do
-	interpret "=>[#m_#{value.gsub(/[^a-z0-1_-]/, '_')}|#{value}] macro"
+	interpret "=>[#m_#{value.gsub(/[^a-z0-1_-]/, '_')}|code[#{value}]] macro"
 end
 
 macro :"#>" do
-	interpret "=>[#c_#{value}|#{value}] command"
+	interpret "=>[#c_#{value}|code[#{value}]] command"
 end
 
 macro :"$>" do
-	val = value.gsub /\./, "_"
-	interpret "=>[#s_#{val}|#{value}] setting"
+	interpret "=>[#s_#{value.gsub(/\./, '_')}|code[#{value}]] setting"
 end
 
 macro :default do
@@ -61,6 +60,19 @@ macro :option do
 	%{
 		<tr>
 			<td><code>-#{ident[0..0]}</code> (<code>--#{ident}</code>)</td>
+			<td>
+#{desc}
+			</td>
+		</tr>
+	}
+end
+
+macro :long_option do
+	ident = param(0)
+	desc = param(1)
+	%{
+		<tr>
+			<td><code>--#{ident}</code></td>
 			<td>
 #{desc}
 			</td>
@@ -118,7 +130,7 @@ macro :ref_macro do
 		]} if raw_attr(:remarks)
 	interpret %{
 	section[
-		@title[<code>#{m_name}</code>]
+		@title[#{m_name}]
 		@id[m_#{m_name.gsub(/[^a-z0-1_-]/, '_')}]
 		txt[
 #{m_value}
@@ -137,7 +149,7 @@ end
 macro :ref_config do
 	m_name = param(0)
 	m_value = param(1)
-	default = Glyph::SYSTEM_CONFIG.get(m_name).to_yaml.gsub(/^---/, '')
+	default = Glyph::SYSTEM_CONFIG.get(m_name).inspect
 	default = "nil" if default.blank?
 	interpret %{tr[
 		td[code[#{m_name}] #[s_#{m_name.gsub(/\./, '_').gsub(/\*/,'')}]]
@@ -150,12 +162,20 @@ macro :ref_config do
 	]}
 end
 
+macro :out_cfg do
+	setting = param(0)
+	snippet = "&[o_#{setting.gsub(/^.+?\./, '')}]"
+	interpret %{ref_config[output.#{setting}|
+#{snippet}
+	]}
+end
+
 macro :config_table do
 	interpret %{table[
 			tr[
 				th[Name]
 				th[Description]
-				th[Default (YAML)]
+				th[Default]
 			]
 			#{value}
 		]}
@@ -167,7 +187,7 @@ macro :class do
 	else
 		path = value
 	end
-	interpret %{=>[&[yardoc]/#{path}|code[#{value}]]}
+	interpret %{=>[&[rubydoc]/#{path}|code[#{value}]]}
 end
 
 

@@ -48,7 +48,45 @@ describe Glyph::Macro::Validators do
 
 	it "should validate XML attributes" do
 		language 'xml'
-		output_for("test[test @.test[test]]").should == "<test>test</test>"
+		output_for("test[test @.test[test]]").should == "<test>test </test>"
+	end
+
+	it "should validate required attributes" do
+		Glyph['document.output'] = 'web'
+		Glyph.run! 'load:macros'
+		lambda { output_for("section[section[@src[test]]]") }.should raise_error(Glyph::MacroError, "Macro 'section' requires a 'title' attribute")
+	end
+
+	it "should validate if a macro is within another one" do
+		define_em_macro
+		Glyph.macro :within_m do
+			within :em
+			"---"
+		end
+		lambda { output_for("within_m[test]") }.should raise_error(Glyph::MacroError, "Macro 'within_m' must be within a 'em' macro")
+	end	
+
+	it "should validate if a macro is not within another one" do
+		define_em_macro
+		Glyph.macro :within_m do
+			not_within :em
+			"---"
+		end
+		lambda { output_for("em[within_m[test]]") }.should raise_error(Glyph::MacroError, "Macro 'within_m' must not be within a 'em' macro")
+	end	
+
+	it "should validate if macro contains quoted parameters" do
+		Glyph.run! 'load:macros'
+		Glyph.macro :q_par_0 do
+			quoted_parameter 0
+			"---"
+		end
+		Glyph.macro :q_par_1 do
+			quoted_parameter 1
+			"---"
+		end
+		lambda { puts output_for("q_par_0[.|'[test]]") }.should raise_error(Glyph::MacroError, "Macro 'q_par_0' requires a quoted macro at position 0")
+		output_for("q_par_1[.|'[test]]").should == "---"
 	end
 
 end

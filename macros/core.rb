@@ -1,4 +1,5 @@
 #!/usr/bin/env ruby
+# encoding: utf-8
 
 macro :snippet do
 	no_mutual_inclusion_in 0	
@@ -16,7 +17,6 @@ macro :snippet do
 			else
 				macro_warning e.message, e
 			end
-			macro_todo "Correct errors in snippet '#{ident}'"
 		end
 	else
 		macro_warning "Snippet '#{ident}' does not exist"
@@ -69,7 +69,7 @@ macro :include do
 				macro_warning e.message, e
 			end
 		else
-			if Glyph["filters.by_file_extension"] && !ext.in?(['rb','glyph']) then
+			if Glyph["options.filter_by_file_extension"] && !ext.in?(['rb','glyph']) then
 				if Glyph::MACROS.include?(ext.to_sym) then
 					contents = "#{ext}[#{contents}]"
 				else 
@@ -78,16 +78,15 @@ macro :include do
 			end
 			begin 
 				folder = Glyph.lite? ? "" : "text/" 
-				update_source v, folder+v
+				topic = (attr(:topic) && Glyph.multiple_output_files?) ? folder+v : nil
+				update_source v, folder+v, topic
 				interpret contents
 			rescue Glyph::MutualInclusionError => e
 				raise
 			rescue Glyph::MacroError => e
 				macro_warning e.message, e
-				macro_todo "Correct errors in file '#{value}'"
 			rescue Exception => e
 				macro_warning e.message, e
-				macro_todo "Correct errors in file '#{value}'"
 			end
 		end
 	else
@@ -130,15 +129,14 @@ end
 
 macro :condition do
 	min_parameters 1
-	max_parameters 2
+	max_parameters 3
 	res = param(0)
-	(res.blank? || res == "false") ? "" : param(1).to_s
+	(res.blank? || res == "false") ? param(2).to_s : param(1).to_s
 end
 
 macro :eq do
-	min_parameters 1
-	max_parameters 2
-	(param(0).to_s == param(1).to_s)	? true : nil
+	exact_parameters 2
+	(param(0) == param(1))	? true : nil
 end
 
 macro :not do
@@ -148,27 +146,37 @@ macro :not do
 end
 
 macro :and do
-	min_parameters 1
-	max_parameters 2
+	exact_parameters 2
 	res_a = !param(0).blank?
 	res_b = !param(1).blank?
 	(res_a && res_b) ? true : nil
 end
 
 macro :or do
-	min_parameters 1
-	max_parameters 2
+	exact_parameters 2
 	res_a = !param(0).blank?
 	res_b = !param(1).blank?
 	(res_a || res_b) ? true : nil
 end
 
-macro :match do
+macro :lt do
 	exact_parameters 2
-	val = param(0).to_s
-	regexp = param(1).to_s
-	macro_error "Invalid regular expression: #{regexp}" unless regexp.match /^\/.*\/[a-z]?$/
-	val.match(instance_eval(regexp)) ? true : nil
+	(param(0) < param(1)) ? true : nil
+end
+
+macro :lte do
+	exact_parameters 2
+	(param(0) <= param(1)) ? true : nil
+end
+
+macro :gt do
+	exact_parameters 2
+	(param(0) > param(1)) ? true : nil
+end
+
+macro :gte do
+	exact_parameters 2
+	(param(0) >= param(1)) ? true : nil
 end
 
 macro "alias:" do
@@ -176,29 +184,229 @@ macro "alias:" do
 	Glyph.macro_alias param(0) => param(1)
 end
 
-macro "rewrite:" do
+macro "define:" do
 	safety_check
 	exact_parameters 2
-	macro_name = param(0).to_sym
-	@node.param(1).descend do |n, level|
-		if n[:name] == macro_name then
-			macro_error "Macro '#{macro_name}' cannot be defined by itself"
-		end
-	end
-	string = raw_param(1)
-	Glyph.macro macro_name do
-		s = string.dup
-		# Parameters
-		s.gsub!(/\{\{(\d+)\}\}/) do
-			raw_param($1.to_i).strip
-		end
-		# Attributes
-		s.gsub!(/\{\{([^\[\]\|\\\s]+)\}\}/) do
-			raw_attr($1.to_sym).strip
-		end
-		interpret s
-	end
+	Glyph.define param(0).to_sym, raw_param(1).dup	
 	nil
+end
+
+macro "output?" do
+	Glyph['document.output'].in? parameters
+end
+
+macro :layout do
+	dispatch do |node|
+		node[:name] = "layout/#{node[:name]}".to_sym
+		Glyph::Macro.new(node).expand
+	end
+end
+
+macro :let do
+	exact_parameters 1
+	param(0).to_s
+end
+
+macro :attribute do
+	exact_parameters 1
+	a = param(0).to_sym
+	macro_node = @node.find_parent do |n|
+		n.is_a?(Glyph::MacroNode) && n.attr(a)
+	end
+	if macro_node then
+		Glyph::Macro.new(macro_node).attr(a)
+	else
+		nil
+	end
+end
+
+macro "attribute:" do
+	exact_parameters 2
+	a = param(0).to_sym
+	macro_node = @node.find_parent do |n|
+		n.is_a?(Glyph::MacroNode) && n.attr(a)
+	end
+	macro_error "Undeclared attribute '#{a}'" unless macro_node
+	attr_value = param(1)
+	macro_node.attr(a).children.clear
+	macro_node.attr(a) << Glyph::TextNode.new.from(:value => attr_value)	
+	nil
+end
+
+macro :add do
+	min_parameters 2
+	params.inject(0){|sum, n| sum + n.to_i}
+end
+
+macro :subtract do
+	min_parameters 2
+	params[1..params.length-1].inject(params[0].to_i){|diff, n| diff - n.to_i}
+end
+
+macro :multiply do
+	min_parameters 2
+	params.inject(1){|mult, n| mult * n.to_i}
+end
+
+macro :s do
+	dispatch do |node|
+		forbidden = [:each, :each_line, :each_byte, :upto, :intern, :to_sym, :to_f]
+		meth = node[:name]
+		infer_type = lambda do |str|
+			case
+			when str.match(/[+-]?\d+/) then
+				# Integer
+				str.to_i
+			when str.match(/^\/.+?\/[imoxneus]?$/) then
+				# Regexp
+				Kernel.instance_eval str
+			else
+				str
+			end
+		end
+		macro_error "Macro 's/#{meth}' takes at least one parameter" unless node.params.length > 0
+		macro_error "String method '#{meth}' is not supported" if meth.in?(forbidden) || meth.to_s.match(/\!$/)
+		str = node.param(0).evaluate(node, :params => true)
+		begin
+			if node.param(1) then
+				meth_params = node.params[1..node.params.length-1].map{|p| infer_type.call(p.evaluate(node, :params => true))}
+				str.send(meth, *meth_params).to_s
+			else
+				str.send(meth).to_s
+			end
+		rescue Exception => e
+			macro_warning "\"#{str}\".#{meth}(#{meth_params.map{|p| p.inspect}.join(', ') rescue nil}) - #{e.message}", e
+			""
+		end
+	end
+end
+
+macro :while do
+	exact_parameters 2
+	raw_cond = @node.parameter 0
+	raw_body = @node.parameter 1
+	cond = raw_cond.evaluate(@node, :params => true)
+	while (!cond.blank? && cond != "false") do
+		result = raw_body.evaluate(@node, :params => true)
+		cond = raw_cond.evaluate(@node, :params => true)
+		result
+	end
+end
+
+macro :quote do
+	"#@name[#{@node.contents}]"
+end
+
+macro :unquote do
+	exact_parameters 1
+	content = parse_quoted_string value
+	content.respond_to?(:parameters) ? Glyph::Macro.new(content).parameters.join : content[:value]
+end
+
+macro :apply do
+	exact_parameters 2
+	quoted_parameter 0
+	quote = parse_quoted_string value
+	result = []
+	Glyph::Macro.new(quote).node.parameters.each do |p|
+		content = p.children.select{ |c| c.respond_to?(:parameters) || !c[:value].to_s.strip.blank?}[0]
+		if content.respond_to? :parameters then
+			# macro node
+			result << Glyph::Macro.new(content).apply(parameter(1))
+		else
+			# text node
+			result << interpret(raw_parameter(1).to_s.gsub(/\{\{0}\}/, content[:value]).gsub(/\{\{.+?\}\}/, ''))
+		end
+	end
+	result = [""] if result.all?{|i| i.blank?}
+	"'[#{result.join("|")}]"
+end
+
+macro :reverse do
+	exact_parameters 1
+	quoted_parameter 0
+	quote = parse_quoted_string value
+	"'[#{quote.parameters.reverse.map{|p| p.contents}.join("|")}]"
+end
+
+macro :length do
+	exact_parameters 1
+	quoted_parameter 0
+	quote = parse_quoted_string value
+	quote.parameters.length.to_s
+end
+
+macro :get do
+	exact_parameters 2
+	quoted_parameter 0
+	quote = parse_quoted_string value
+	interpret quote.parameter(parameter(1).to_i).to_s rescue "" 
+end
+
+macro :sort do
+	max_parameters 2
+	quoted_parameter 0
+	sort_by = parameter 1 rescue nil
+	if sort_by.blank? || sort_by.match(/^\d+$/) then
+		param_sort = sort_by.to_i
+	else
+		attr_sort = sort_by
+	end
+	quote = parse_quoted_string value
+	sorted_parameters = quote.parameters.sort_by do |p|
+		content = p.children.select{ |c| c.respond_to?(:parameters) || !c[:value].to_s.strip.blank?}[0]
+		if content.respond_to? :parameters then
+			# macro node
+			if param_sort then
+				Glyph::Macro.new(content).parameter(param_sort).to_s
+			else
+				Glyph::Macro.new(content).attribute(attr_sort.to_sym).to_s
+			end
+		else
+			# text node
+			content[:value]
+		end
+	end
+	"'[#{sorted_parameters.map{|p| p.to_s}.join("|")}]"
+end
+
+
+macro :select do
+	exact_parameters 2
+	quoted_parameter 0
+	quote = parse_quoted_string value
+	result = []
+	Glyph::Macro.new(quote).node.parameters.each do |p|
+		content = p.children.select{ |c| c.respond_to?(:parameters) || !c[:value].to_s.strip.blank?}[0]
+		if content.respond_to? :parameters then
+			# macro node
+			selected = Glyph::Macro.new(content).apply(parameter(1))
+		else
+			# text node
+			selected = interpret raw_parameter(1).to_s.gsub(/\{\{0}\}/, content[:value]).gsub(/\{\{.+?\}\}/, '') 
+		end
+		result << content unless selected.blank? || selected == "false"
+	end
+	result = [""] if result.all?{|i| i.blank?}
+	"'[#{result.map{|p| p.to_s}.join("|")}]"
+end
+
+
+macro :fragment do
+	exact_parameters 2
+	ident, contents = param(0).to_sym, param(1)
+	macro_error "Fragment '#{ident}' is already defined" if @node[:document].fragments.has_key? ident
+	@node[:document].fragments[ident] = contents
+end
+
+macro :embed do
+	exact_parameters 1
+	ident = param(0).to_sym
+	placeholder do |document|
+		fragment = document.fragments[ident]
+		macro_error "Fragment '#{ident}' is not defined" unless fragment
+		fragment
+	end
 end
 
 macro_alias '--' => :comment
@@ -209,5 +417,15 @@ macro_alias '%' => :ruby
 macro_alias '$' => :config
 macro_alias '$:' => 'config:'
 macro_alias '.' => :escape
+macro_alias "'" => :quote
+macro_alias "~" => :unquote
+macro_alias :map => :apply
+macro_alias :filter => :select
 macro_alias '?' => :condition
-macro_alias 'rw:' => 'rewrite:'
+macro_alias 'def:' => 'define:'
+macro_alias '@' => :attribute
+macro_alias :attr => :attribute
+macro_alias '@:' => "attribute:"
+macro_alias "attr:" => "attribute:"
+macro_alias "##" => :fragment
+macro_alias "<=" => :embed

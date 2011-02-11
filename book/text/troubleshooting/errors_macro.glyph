@@ -1,5 +1,3 @@
-section[
-	@title[Macro Errors]
 	txt[
 The following errors are displayed in the form:
 
@@ -29,7 +27,7 @@ Returned if the macro was called with a different number of parameters than.
 Returned by the %>[include] if used in =>[#lite_mode|lite mode].
 		]
 		ref_error[Filter macro '\.em[extension]' not available|
-Returned by a filter macro if $>[filters.by_file_extension] is set to @true@, but the extension was not recognized.
+Returned by a filter macro if $>[options.filters_by_file_extension] is set to @true@, but the extension was not recognized.
 		]
 		ref_error[Invalid regular expression: em[regexp]|
 Returned by the %>[match] if an invalid regular expression was supplied.
@@ -56,7 +54,7 @@ Returned by the %>[snippet] if an invalid snippet ID was supplied.
 Returned by the %>[include] if an invalid file was supplied.
 		]
 		ref_error[Filter macro '\.em[macro_name]' not found|
-Returned by the %>[include] if the $>[filters.by_file_extension] is set to @true@ but the file extension of the included file is not recognized as a filter macro.
+Returned by the %>[include] if the $>[options.filters_by_file_extension] is set to @true@ but the file extension of the included file is not recognized as a filter macro.
 		]
 		ref_error[RedCloth gem not installed. Please run: gem install RedCloth|
 Returned by the %>[textile] if the RedCloth gem is not installed.
@@ -89,10 +87,15 @@ An invalid XML attribute name was supplied to the code[\|xml\|] system macro (se
 Returned if a forbidden macro was used in safe mode (see =>[#modes]).
 		]
 		ref_error[Cannot reset 'system.\.em[setting_name]' setting (system use only).|
-Returned by the =>[config:] when attempting to override a setting in the code[system.*] namespace.
+Returned by the =>[#m_config_] when attempting to override a setting in the code[system.*] namespace.
 		]
 		ref_error[Macro '\.em[macro_name]' cannot be defined by itself|
-Returned by the =>[rewrite:] if it contains a macro with the same name.
+Returned by the =>[#m_rewrite_] if it contains a macro with the same name.
 		]
+		ref_error[Macro '\.em[macro_a]' must be within a '\.em[macro_b]' macro|
+Returned if a macro was used in the wrong place.
+		] 
+		ref_error[Macro '\.em[macro_a]' must not be within a '\.em[macro_b]' macro|
+Returned if a macro was used in the wrong place.
+		] 
 	]
-]

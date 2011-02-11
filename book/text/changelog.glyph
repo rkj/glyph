@@ -1,10 +1,12 @@
 %[=
 macro :features do
 	verb = (@name == :features) ? "Implemented" : "Fixed"
-	total = @node.children[0].children.length
+	total = @node.child_macros.length
+	name = @name.to_s.capitalize
+	name.chop! if total == 1
 	interpret %{
 		section[
-			@title[#{total} #{@name.to_s.capitalize} #{verb}]
+			@title[#{total} #{name} #{verb}]
 			table[
 				tr[
 					th[ID]
@@ -30,10 +32,55 @@ rw:[issue|
 		td[txt[{{1}}]]
 	]
 ]
-?[%[lite?]|
+?[eq[%[ARGV\[0\]]|generate]|
 	%:[%>|"#{value} macro"]
 	%:[#>|"#{value} command"]
 	%:[$>|"#{value} setting"]
+]
+release[0.4.2|October 22th 2010|
+	features[
+		issue[172|A new %>[output?] macro can be used to test whether Glyph is compiling to a particular output format.]
+		issue[175|The conditional macro now support a third parameter (else branch).]
+		issue[176|A bunch of new aliases and shortcuts are available for the section macro.]
+	]
+	bugs[
+		issue[178|No error is raised anymore if less than the required parameters/attributes are supplied to a rewritten macro.]
+	]
+]
+release[0.4.1|September 23th 2010|
+	bugs[
+		issue[169|*.scss files are now supported by the %>[style].]
+		issue[170|Improved default CodeRay stylesheet.]
+		issue[171|SCSS now used internally by Glyph to generate default CSS files.]
+		issue[173|Consecutive escape sequences are now interpreted correctly in topics.]
+		issue[174|Fixed error causing broken images in web5/html5 output.]
+	]
+]
+release[0.4.0|September 3th 2010|
+	features[
+		issue[40|A new #>[stats] can be used to display statistics about project files, snippets, macros, bookmarks and links.]
+		issue[73|It is now possible to validate online HTTP links.]
+		issue[112|It is now possible to use _wkhtmltopdf_ instead of Prince to generate PDF files from HTML files.]
+		issue[114|It is now possible to generate documents comprised of multiple files (topics).]
+		issue[115|It is now possible to define layouts (used when generating multi-file outputs) using Glyph macros.]
+		issue[120|It is now possible to compile your project to a single HTML5 file (@html5@ output) or multiple files (@web5@ output)]
+		issue[135|Stylesheets can now be linked and imported as well as embedded.]
+		issue[138|@web@ and @web5@ output formats inherit @html@ macros.]
+		issue[142|A new %>[navigation] can be used in @web@ and @web5@ outputs to navigate through topics.]
+		issue[143|A topic-based TOC is generated when compiling to @web@ or @web5@]
+		issue[144|Two new validators are now available to check whether a macro has (or doesn't have) a certain ancestor: @within@ and @not_within@.]
+		issue[147|The default stylesheets provided by Glyph are now compatible with HTML5 outputs (html5 and web5).]
+		issue[148|It is now possible to create custom tasks and commands to extend Glyph functionality.]
+	]
+	bugs[
+		issue[133|Added HTML charset to Glyph documents (utf-8).]
+		issue[136|Moved utility functions to separate @Glyph::Utils@ module.]
+		issue[139|Heavily restructured Glyph configuration.]
+		issue[140|Added @Glyph::Macro::Helpers@ module to avoid code duplication in macros for different output formats.]
+		issue[141|Prevented non-rb files to be loaded as macros.]
+		issue[145|Dotfiles are now ignored by #>[init].]
+		issue[167|Fixed PDF book download links.]
+	]
 ]
 release[0.3.0|June 13th 2010|
 	features[
@@ -47,7 +94,7 @@ release[0.3.0|June 13th 2010|
 		issue[124|Implemented new %>[article] and %>[book].]
 		issue[126|A new %>[rewrite:] has been implemented to create simple macros using just Glyph code.]
 		issue[127|A new %>[alias] has been implemented to create macro aliases.]
-		issue[128|A blacklist for XML tags has been exposed via the $>[language.options.xml_blacklist].]
+		issue[128|A blacklist for XML tags has been exposed via the @language.options.xml_blacklist@ setting.]
 		issue[129|The %>[include] can now be used in lite mode, it can evaluate ruby files and requires relative paths.]
 		issue[130|A new "safe mode" has been implemented to explicitly forbid certain potentially unsafe macros.]
 	]

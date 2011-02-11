@@ -1,8 +1,12 @@
+# encoding: utf-8
+
 module Glyph
 
 	# The Glyph::Config class is used (you don't say!) to store configuration data. Essentially it wraps a Hash of Hashes
 	# and provides some useful methods to access keys and subkeys.
 	class Config
+
+		include Glyph::Utils
 
 		# Initializes the configuration with a hash of options:
 		# * :file (default: nil) - A YAML file to read data from

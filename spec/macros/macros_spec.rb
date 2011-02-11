@@ -18,8 +18,8 @@ describe "Macro:" do
 		interpret "this is a #[test|test]."
 		doc = @p.document
 		doc.output.should == "this is a <a id=\"test\">test</a>."
-		doc.bookmarks.has_key?(:test).should == true 
-		lambda { interpret "this is a #[test|test]. #[test|This won't work!]"; @p.document }.should raise_error(Glyph::MacroError)
+		doc.bookmarks[:test].should == Glyph::Bookmark.new({:file => nil, :title => 'test', :id => :test})
+		lambda { interpret "this is a #[test|test]. #[test|This won't work!]"; @p.document }.should raise_error
 	end
 
 	it "section, chapter, header" do
@@ -36,12 +36,12 @@ describe "Macro:" do
 					</div>
 				</div>
 		}.gsub(/\n|\t/, '')
-		doc.bookmark?(:"sec-y").should == {:id => :"sec-y", :title => "Section Y"} 
+		doc.bookmark?(:"sec-y").should == Glyph::Bookmark.new({:id => :"sec-y", :title => "Section Y", :file => nil})
 	end
 
 	it "document, head, style" do
-		interpret "document[head[style[test.sass]]]"
-		@p.document.output.gsub(/\n|\t/, '').should == %{
+		file_copy Glyph::SPEC_DIR/'files/test.scss', Glyph::PROJECT/'styles/test.scss'
+		doc = %{
 		<?xml version="1.0" encoding="utf-8"?>
 		<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd">
 		<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
@@ -50,10 +50,15 @@ describe "Macro:" do
 				<meta name="author" content="#{Glyph["document.author"]}" />
 				<meta name="copyright" content="#{Glyph["document.author"]}" />
 				<meta name="generator" content="Glyph v#{Glyph::VERSION} (http://www.h3rald.com/glyph)" />
-				<style type=\"text/css\">#main {  background-color: blue; }</style>
+				<meta http-equiv="content-type" content="text/html; charset=utf-8" />
+				<style type=\"text/css\">#main {  background-color: blue;  margin: 12px; }</style>
 			</head>
 		</html>
-		}.gsub(/\n|\t/, '')
+		}
+		interpret "document[head[style[test.sass]]]"
+		@p.document.output.gsub(/\n|\t/, '').should == doc.gsub(/\n|\t/, '')
+		interpret "document[head[style[test.scss]]]"
+		@p.document.output.gsub(/\n|\t/, '').should == doc.gsub(/\n|\t/, '')
 	end	
 
 	it "style should link files by absolute or relative path in Lite mode" do
@@ -66,7 +71,8 @@ describe "Macro:" do
 				<meta name="author" content="#{Glyph["document.author"]}" />
 				<meta name="copyright" content="#{Glyph["document.author"]}" />
 				<meta name="generator" content="Glyph v#{Glyph::VERSION} (http://www.h3rald.com/glyph)" />
-				<style type=\"text/css\">#main {  background-color: blue; }</style>
+				<meta http-equiv="content-type" content="text/html; charset=utf-8" />
+				<style type=\"text/css\">#main {  background-color: blue;  margin: 12px; }</style>
 			</head>
 		</html>
 		}.gsub(/\n|\t/, '')
@@ -74,8 +80,14 @@ describe "Macro:" do
 		Dir.chdir Glyph::PROJECT
 		interpret "document[head[style[styles/test.sass]]]"
 		@p.document.output.gsub(/\n|\t/, '').should == result
-		interpret "document[head[style[#{Glyph::PROJECT}/styles/test.sass]]]"
-		@p.document.output.gsub(/\n|\t/, '').should == result
+	end
+
+	it "style should import and link stylesheets" do
+		Glyph['document.styles'] = 'import'
+		output_for("head[style[default.css]]").match(/@import url\("styles\/default\.css"\)/).blank?.should == false
+		Glyph['document.styles'] = 'link'
+		output_for("head[style[default.css]]").match(%{<link href="styles/default.css" rel="stylesheet" type="text/css" />}).blank?.should == false
+		Glyph['document.styles'] = 'embed'
 	end
 
 	it "toc" do
@@ -85,10 +97,10 @@ describe "Macro:" do
 		doc.output.gsub!(/\n|\t/, '')
 		doc.output.slice(/(.+?<\/div>)/, 1).should == %{
 			<div class="contents">
-			<h2 class="toc-header" id="h_toc">Table of Contents</h2>
+			<h2 class="toc-header" id="toc">Table of Contents</h2>
 			<ol class="toc">
-				<li class=" section"><a href="#h_1">Container section</a></li>
-				<li class=" section"><a href="#md">Markdown</a></li>
+				<li class="section"><a href="#h_1">Container section</a></li>
+				<li class="section"><a href="#md">Markdown</a></li>
 			</ol>
 			</div>
 		}.gsub(/\n|\t/, '')
@@ -126,7 +138,7 @@ describe "Macro:" do
 
 	it "image should link files by absolute or relative path in Lite mode" do
 		result = %{
-			<img alt="-" src="images/ligature.jpg" width="90%" height="90%" />
+			<img src="images/ligature.jpg" width="90%" height="90%" />
 		}.gsub(/\n|\t/, '')
 		Glyph.lite_mode = true
 		Dir.chdir Glyph::PROJECT
@@ -149,7 +161,7 @@ describe "Macro:" do
 	it "fig should link files by absolute or relative path in Lite mode" do
 		result = %{
 			<div class="figure">
-			<img alt="-" src="images/ligature.jpg" />
+			<img src="images/ligature.jpg" />
 			<div class="caption">Ligature</div>
 			</div>
 		}.gsub(/\n|\t/, '')

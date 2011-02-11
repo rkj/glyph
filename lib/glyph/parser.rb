@@ -1,4 +1,5 @@
 # encoding: utf-8
+
 require 'strscan'
 
 module Glyph
@@ -58,18 +59,15 @@ module Glyph
 				name = @input.matched
 				name.chop!
 				name.chop!
-				error "#{name}[...] - A macro cannot start with '@' or a digit." if name.match(/^[0-1@]/)
-				node = create_node(MacroNode, {
-					:name => name.to_sym, 
-					:escape => true, 
-					:attributes => [], 
-					:parameters => []
-				})
-				while contents = parse_escaped_contents(node) do
-					node << contents unless contents.is_a?(AttributeNode)
+				error "#{name}[=...=] - A macro cannot start with a digit or contain '@'" if (name.match(/^[0-1]/) || name.match(/@/)) && !name.match(/^@:?$/)
+				node = macro_node_for name, true
+				leaf = node
+				node.descend { |n, level| leaf = n }
+				while contents = parse_escaped_contents(leaf) do
+					leaf << contents unless contents.is_a?(AttributeNode)
 				end
 				@input.scan(/\=\]/) or error "Escaping macro '#{name}' not closed"		
-				organize_children_for node
+				organize_children_for leaf
 				node
 			else
 				nil
@@ -77,7 +75,7 @@ module Glyph
 		end
 
 		def escaping_attribute(current)
-			if @input.scan(/@[^\[\]\|\\\s]+\[\=/) then
+			if @input.scan(/@[^:\[\]\|\\\s]+\[\=/) then
 				error "Attributes cannot be nested" if @current_attribute
 				name = @input.matched[1..@input.matched.length-3]
 				node = create_node(AttributeNode, {
@@ -99,18 +97,15 @@ module Glyph
 			if @input.scan(/[^\[\]\|\\\s]+\[/) then
 				name = @input.matched
 				name.chop!
-				error "#{name}[...] - A macro cannot start with '@' or a digit." if name.match(/^[0-1@]/)
-				node = create_node(MacroNode, {
-					:escape => false, 
-					:name => name.to_sym, 
-					:attributes => [], 
-					:parameters => []
-				})
-				while contents = parse_contents(node) do
-					node << contents unless contents.is_a?(AttributeNode)
+				error "#{name}[...] - A macro cannot start with a digit or contain '@'" if (name.match(/^[0-1]/) || name.match(/@/)) && !name.match(/^@:?$/)
+				node = macro_node_for name 
+				leaf = node
+				node.descend { |n, level| leaf = n }
+				while contents = parse_contents(leaf) do
+					leaf << contents unless contents.is_a?(AttributeNode)
 				end
 				@input.scan(/\]/) or error "Macro '#{name}' not closed"		
-				organize_children_for node
+				organize_children_for leaf
 				node
 			else
 				nil
@@ -118,7 +113,7 @@ module Glyph
 		end
 
 		def attribute(current)
-			if @input.scan(/@[^\[\]\|\\\s]+\[/) then
+			if @input.scan(/@[^:\[\]\|\\\s]+\[/) then
 				error "Attributes cannot be nested" if current.is_a?(AttributeNode)
 				name = @input.matched[1..@input.matched.length-2]
 				node = create_node(AttributeNode, {
@@ -142,7 +137,7 @@ module Glyph
 				offset = @input.matched.match(/^[^\\](\]|\|)$/) ? 1 : @input.matched.length
 			@input.pos = @input.pos - offset rescue @input.pos
 			return nil if @input.pos == start_p
-			match = @input.string[start_p..@input.pos-1]
+			match = extract_string(start_p..@input.pos-1)
 			illegal_macro_delimiter? start_p, match
 			if match.length > 0 then
 				create_node TextNode, :value => match
@@ -164,7 +159,7 @@ module Glyph
 				end
 			@input.pos = @input.pos - offset rescue @input.pos
 			return nil if @input.pos == start_p
-			match = @input.string[start_p..@input.pos-1]
+			match = extract_string(start_p..@input.pos-1)
 			illegal_nesting = match.match(/([^\[\]\|\\\s]+)\[\=/)[1] rescue nil
 				if illegal_nesting then
 					error "Cannot nest escaping macro '#{illegal_nesting}' within escaping macro '#{current[:name]}'"
@@ -197,6 +192,45 @@ module Glyph
 
 		private
 
+		def macro_node_for(ident, escape=false)
+			macro_names = ident.split(/\//).select{|e| !e.blank?}
+			nest_node = lambda do |parent, count|
+				node = create_node(MacroNode, {
+					:escape => false, 
+					:name => macro_names[count].to_sym
+				})
+				parent ? (parent&0) << node : parent = node
+				if macro_names[count+1] then
+					node << create_node(ParameterNode, :name => :"0") 
+					nest_node.call(node, count+1)
+				else
+					node[:parameters] = []
+					node[:attributes] = []
+					node[:escape] = escape
+				end
+				node
+			end
+			nest_node.call(nil, 0)
+		end
+		
+		# Thanks Thomas Leitner
+		# http://redmine.ruby-lang.org/issues/show/2645
+		def extract_string(range)
+			result = nil
+			if RUBY_VERSION >= '1.9'
+				begin
+					enc = @input.string.encoding
+					@input.string.force_encoding('ASCII-8BIT')
+					result = @input.string[range].force_encoding(enc)
+				ensure
+					@input.string.force_encoding(enc)
+				end
+			else
+				result = @input.string[range]
+			end
+			result
+		end
+
 		def aggregate_parameters_for(node)
 			indices = []
 			count = 0
@@ -216,7 +250,7 @@ module Glyph
 				total_parameters = 0
 				save_parameter = lambda do |max_index|
 					parameter = create_node ParameterNode, :name => "#{total_parameters}".to_sym
-						total_parameters +=1
+					total_parameters +=1
 					current_index.upto(max_index) do |index|
 						parameter << (node & index)
 					end

@@ -1,6 +1,7 @@
 # Copyright (c) 2009-2010 Fabio Cevasco
 # website: http://www.h3rald.com/glyph
 # license: MIT
+# encoding: utf-8
 
 require 'rubygems'
 require 'pathname'
@@ -25,18 +26,24 @@ module Glyph
 	TASKS_DIR = Pathname(__FILE__).dirname.expand_path/'../tasks'
 
 	require LIB/'system_extensions'
+	require LIB/'utils'
 	require LIB/'config'
 	require LIB/'node'
+	require LIB/'bookmark'
 	require LIB/'document'
 	require LIB/'macro_validators'
 	require LIB/'macro'
 	require LIB/'syntax_node'
 	require LIB/'parser'
 	require LIB/'interpreter'
+	require LIB/'analyzer'
+	require LIB/'reporter'
+	extend Glyph::Utils
 
 	class Error < RuntimeError; end
 	class SyntaxError < Error; end
 	class MacroError < Error
+		include Glyph::Utils
 		attr_reader :macro
 
 		# Initializes a new Glyph::MacroError
@@ -49,9 +56,10 @@ module Glyph
 
 		# Displays the error message, source, path and node value (if debugging)
 		def display
-			Glyph.warning exception.message
-			Glyph.msg "    source: #{@macro.source}\n    path: #{@macro.path}"
-			Glyph.msg "#{"-"*54}\n#{@macro.node.to_s.gsub(/\t/, ' ')}\n#{"-"*54}" if Glyph.debug?
+			warning exception.message
+			path = @macro.path.blank? ? "" : "\n   path: #{@macro.path}"
+			msg "   source: #{@macro.source_name}#{path}"
+			msg "#{"-"*54}\n#{@macro.node.to_s.gsub(/\t/, ' ')}\n#{"-"*54}" if Glyph.debug?
 		end
 	end
 	class MutualInclusionError < MacroError; end
@@ -64,6 +72,15 @@ module Glyph
 
 	# All the currently-loaded macros
 	MACROS = {}
+
+	# Anonymous macro cache
+	LAMBDAS = {}
+	
+	# All the currently-loaded macro representations
+	REPS = {}
+
+	# All macro aliases
+	ALIASES = {:by_alias => {}, :by_def => {}}
 
 	begin
 		unless const_defined? :MODE then
@@ -139,6 +156,7 @@ module Glyph
 	# Restores Glyph configuration (keeping all overrides and project settings)
 	def self.config_refresh
 		CONFIG.merge!(SYSTEM_CONFIG.merge(GLOBAL_CONFIG.merge(PROJECT_CONFIG)))
+		Glyph.safe_mode = Glyph['options.safe_mode']
 	end
 
 	# Resets Glyph configuration (removing all overrides and project settings)
@@ -146,13 +164,6 @@ module Glyph
 		Glyph::CONFIG.reset
 		Glyph::PROJECT_CONFIG.reset
 		self.config_refresh
-	end
-
-	# Returns true if the PROJECT constant is set to a valid Glyph project directory
-	def self.project?
-		children = ["text", "output", "snippets.yml", "config.yml", "document.glyph"].sort
-		actual_children = PROJECT.children.map{|c| c.basename.to_s}.sort 
-		(actual_children & children) == children
 	end
 
 	# Resets Glyph completely, i.e.:
@@ -163,6 +174,8 @@ module Glyph
 		self.enable_all
 		self.config_reset
 		MACROS.clear
+		LAMBDAS.clear
+		REPS.clear
 		SNIPPETS.clear
 	end
 
@@ -198,9 +211,45 @@ module Glyph
 		MACROS[name.to_sym] = block
 	end
 
-	def self.rewrite(name, &block)
-		MACROS[name.to_sym] = lambda do
-			rewrite &block
+	# Defines a new macro representation
+	# @since 0.5.0
+	# @param [Symbol, String] name the name of the macro
+	def self.rep(name, &block)
+		REPS[name.to_sym] = block
+		# Mirror aliases as well
+		ALIASES[:by_def][name.to_sym].to_a.each { |a| REPS[a] = block }
+	end
+
+	# Loads macro representations for a given output
+	# @since 0.5.0
+	# @param [Symbol, String] output a valid output format
+	def self.reps_for(output)
+		Glyph.instance_eval file_load(Glyph::HOME/"macros/reps/#{output}.rb") rescue nil
+	end
+
+	# Loads project macro representations for a given output
+	# @since 0.5.0
+	# @param [Symbol, String] output a valid output format
+	def self.project_reps_for(output)
+		Glyph.instance_eval file_load(Glyph::PROJECT/"lib/macros/reps/#{output}.rb") rescue nil
+	end
+
+	#@since 0.5.0
+	# Defines a new macro in Glyph code.
+	# @param [Symbol, String] name the name of the macro
+	# @param [String] text the Glyph code used to define the macro
+	def self.define(name, text)
+		macro name do
+			body = text.dup
+			# Parameters
+			body.gsub!(/\{\{(\d+)\}\}/) do
+				raw_param($1.to_i).to_s.strip
+			end
+			# Attributes
+			body.gsub!(/\{\{([^\[\]\|\\\s]+)\}\}/) do
+				raw_attr($1.to_sym).to_s.strip
+			end
+			interpret body
 		end
 	end
 
@@ -210,12 +259,11 @@ module Glyph
 	# 	{:old_name => :new_name}
 	def self.macro_alias(pair)
 		name = pair.keys[0].to_sym
-		found = MACROS[name]
-		if found then
-			self.warning "Invalid alias: macro '#{name}' already exists."
-			return
-		end
-		MACROS[name] = MACROS[pair.values[0].to_sym]
+		orig = pair.values[0].to_sym
+		ALIASES[:by_def][orig] = [] unless ALIASES[:by_def][orig]
+		ALIASES[:by_def][orig] << name unless ALIASES[:by_def][orig].include? name
+		ALIASES[:by_alias][name] = orig 
+		MACROS[name] = MACROS[orig]
 	end
 
 	# Compiles a single Glyph file
@@ -266,36 +314,6 @@ module Glyph
 		result
 	end
 
-
-	# Prints a message
-	# @param [String] message the message to print
-	def self.msg(message)
-		puts message unless Glyph['system.quiet']
-	end
-
-	# Prints an informational message
-	# @param [String] message the message to print
-	def self.info(message)
-		puts "-- #{message}" unless Glyph['system.quiet']
-	end
-
-	# Prints a warning
-	# @param [String] message the message to print
-	def self.warning(message)
-		puts "-> warning: #{message}" unless Glyph['system.quiet']
-	end
-
-	# Prints an error
-	# @param [String] message the message to print
-	def self.error(message)
-		puts "=> error: #{message}" unless Glyph['system.quiet']
-	end
-	
-	# Prints a message if running in debug mode
-	# @param [String] message the message to print
-	def self.debug(message)
-		puts message if Glyph.debug?
-	end
 
 end
 

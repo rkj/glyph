@@ -1,4 +1,5 @@
 #!/usr/bin/env ruby
+# encoding: utf-8
 
 macro :textile do
 	exact_parameters 1
@@ -8,7 +9,7 @@ macro :textile do
 		macro_error "RedCloth gem not installed. Please run: gem install RedCloth"
 	end
 	rc = RedCloth.new value, Glyph::CONFIG.get("filters.redcloth.restrictions")
-	target = Glyph["filters.target"]
+	target = Glyph["output.#{Glyph['document.output']}.filter_target"]
 	case target.to_sym
 	when :html
 		rc.to_html.gsub /<p><\/p>/, ''
@@ -62,13 +63,35 @@ macro :markdown do
 	else
 	 macro_error "No supported MarkDown converter installed. Please run: gem install bluecloth"
 	end
-	target = Glyph["filters.target"]
+	target = Glyph["output.#{Glyph['document.output']}.filter_target"]
 	if target.to_sym == :html then
 		md.to_html
 	else
 		macro_error "#{markdown_converter} does not support target '#{target}'"
 	end
 end
+
+define "textile_section", 
+%{section[
+		@src[{{src}}]
+		@id[{{id}}]
+		@notoc[{{notoc}}]
+		@title[{{title}}]
+		textile[
+{{0}}
+		]
+	]}
+
+define "markdown_section", 
+%{section[
+		@src[{{src}}]
+		@id[{{id}}]
+		@notoc[{{notoc}}]
+		@title[{{title}}]
+		markdown[
+{{0}}
+		]
+	]}
 
 macro :highlight do
 	exact_parameters 2  
@@ -97,7 +120,7 @@ macro :highlight do
 		end
 	end
 	Glyph["highlighter.current"] = highlighter
-	target = Glyph["filters.target"]
+	target = Glyph["output.#{Glyph['document.output']}.filter_target"]
 	result = ""
 	case highlighter.to_sym
 	when :coderay
@@ -123,3 +146,7 @@ end
 
 macro_alias :md => :markdown
 macro_alias :txt => :textile
+macro_alias :txt_section => :textile_section
+macro_alias :md_section => :markdown_section
+macro_alias "§txt" => :textile_section
+macro_alias "§md" => :markdown_section

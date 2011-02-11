@@ -1,0 +1,28 @@
+These settings are used to configure some special options related to output filters and highlighters.
+
+config_table[
+	ref_config[filters.coderay.*|
+Some &[coderay]-specific =>[http://coderay.rubychan.de/doc/classes/CodeRay/Encoders/HTML.html|options].
+	]
+	ref_config[filters.highlighter|
+The current highlighter to use. It can be set to @coderay@ or @ultraviolet@
+	]
+	ref_config[filters.markdown.converter|
+The name of the markdown converter to use with the %>[markdown]. It can be set to one of the following values:
+* BlueCloth
+* RDiscount
+* Maruku
+* Kramdown
+
+If not set, Glyph tests for the presence of each gem in the same order, until one is found. 
+	]
+	ref_config[filters.redcloth.restrictions|
+An @Array@ containing restrictions applied to RedCloth, used by the %>[textile] (see =>[http://redcloth.rubyforge.org/classes/RedCloth/TextileDoc.html|RedCloth Documentation] for more information). 
+	]
+	ref_config[filters.ultraviolet.line_numbers|
+Whether the &[uv] highlighter should display line numbers or not.
+	]
+	ref_config[filters.ultraviolet.theme|
+The theme used by the &[uv] highlighter.
+	]
+]

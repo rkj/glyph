@@ -1,26 +1,27 @@
 #!/usr/bin/env ruby
 
 namespace :project do
+	include Glyph::Utils
 
 	desc "Create a new Glyph project"
 	task :create, [:dir] do |t, args|
 		dir = Pathname.new args[:dir]
 		raise ArgumentError, "Directory #{dir} does not exist." unless dir.exist?
-		raise ArgumentError, "Directory #{dir} is not empty." unless dir.children.blank?
+		raise ArgumentError, "Directory #{dir} is not empty." unless dir.children.select{|f| !f.basename.to_s.match(/^(\..+|Gemfile[.\w]*|Rakefile)$/)}.blank?
 		# Create subdirectories
-		subdirs = ['lib/tasks', 'lib/macros', 'lib/macros/html', 'lib', 'text', 'output', 'images', 'styles']
+		subdirs = ['lib/macros', 'lib/tasks', 'lib/layouts', 'lib/tasks', 'lib/commands', 'text', 'output', 'images', 'styles']
 		subdirs.each {|d| (dir/d).mkpath }
 		# Create snippets
 		yaml_dump Glyph::PROJECT/'snippets.yml', {:test => "This is a \nTest snippet"}
 		# Create files
 		file_copy Glyph::HOME/'document.glyph', Glyph::PROJECT/'document.glyph'
 		config = yaml_load Glyph::HOME/'config.yml'
-	 	config[:document][:filename] = dir.basename.to_s
-	 	config[:document][:title] = dir.basename.to_s
+		config[:document][:filename] = dir.basename.to_s
+		config[:document][:title] = dir.basename.to_s
 		config[:document][:author] = ENV['USER'] || ENV['USERNAME'] 	
-		config.delete(:system)
+		config.each_pair { |k, v| config.delete(k) unless k == :document }
 		yaml_dump Glyph::PROJECT/'config.yml', config
-		Glyph.info "Project '#{dir.basename}' created successfully."
+		info "Project '#{dir.basename}' created successfully."
 	end
 
 	desc "Add a new text file to the project"
@@ -31,5 +32,6 @@ namespace :project do
 		raise ArgumentError, "File '#{args[:file]}' already exists." if file.exist?
 		File.new(file.to_s, "w").close
 	end
-
 end
+
+

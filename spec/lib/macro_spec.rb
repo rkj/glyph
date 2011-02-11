@@ -1,5 +1,4 @@
 #!/usr/bin/env ruby
-require File.join(File.dirname(__FILE__), "..", "spec_helper")
 
 describe Glyph::Macro do
 
@@ -44,17 +43,17 @@ describe Glyph::Macro do
 	end
 
 	it "should store and check bookmarks" do
-		h = { :id => "test2", :title => "Test 2" }
+		h = { :id => "test2", :title => "Test 2", :file => 'test.glyph' }
 		@macro.bookmark h
-		@doc.bookmark?(:test2).should == h
-		@macro.bookmark?(:test2).should == h
+		@doc.bookmark?(:test2).should == Glyph::Bookmark.new(h)
+		@macro.bookmark?(:test2).should == Glyph::Bookmark.new(h)
 	end
 
 	it "should store and check headers" do
-		h = { :level => 2, :id => "test3", :title => "Test 3" }
+		h = { :level => 2, :id => "test3", :title => "Test 3", :file => "test.glyph"}
 		@macro.header h
-		@doc.header?("test3").should == h
-		@macro.header?("test3").should == h
+		@doc.header?("test3").should == Glyph::Bookmark.new(h)
+		@macro.header?("test3").should == Glyph::Bookmark.new(h)
 	end
 
 	it "should store placeholders" do
@@ -176,6 +175,32 @@ describe Glyph::Macro do
 		m.node.attribute(:b)[:value].should == nil
 	end
 
+	it "should treat empty parameters/attributes as null" do
+		Glyph.macro :test_ap do
+			result = ""
+			if attr(:a) then
+				result << "(a)"
+			else
+				result << "(!a)"
+			end
+			if param(0) then
+				result << "(0)"
+			else
+				result << "(!0)"
+			end
+			if param(1) then
+				result << "(1)"
+			else
+				result << "(!1)"
+			end
+			result
+		end
+		output_for("test_ap[]").should == "(!a)(!0)(!1)"
+		output_for("test_ap[@a[]|]").should == "(!a)(!0)(!1)"
+		output_for("test_ap[@a[.]|]").should == "(a)(!0)(!1)"
+		output_for("test_ap[@a[.].|.]").should == "(a)(0)(1)"
+	end
+
 	it "should expose a path method to determine its location" do
 		tree = Glyph::Parser.new(%{
 		test1[
@@ -194,13 +219,49 @@ describe Glyph::Macro do
 		Glyph.macro :test_int do
 			interpret "- #{value} -"
 		end
-		text1 = %{em[test\\\\\.\\[...\\\\\.\\]]} # test\\\.\[\\\.\]
-		text2 = %{em[=test\\\\\\.[...\\\\\\.]=]}  # test\\\.[\\\.]
-		text3 = %{test_int[em[=test\\\\\.[...\\\\\.]=]]}
+		text1 = "em[test\\\\\\.\\[...\\\\\\.\\]]" # test\\\.\[\\\.\]
+		text2 = "em[=test\\\\\\.[...\\\\\\.]=]"  # test\\\.[\\\.]
+		text3 = "test_int[em[=test\\\\\\.[...\\\\\\.]=]]"
 		out = "<em>test\\[...\\]</em>"
 		output_for(text1).should == out
 		output_for(text2).should == out
 		output_for(text3).should == "- #{out} -"
+	end
+
+	it "should render representations" do
+		Glyph.macro :em_with_rep do
+			@data[:value] = value
+			render
+		end
+		Glyph.rep :em_with_rep do |data|
+			%{<em>!#{data[:value]}!</em>}
+		end
+		output_for("em_with_rep[testing...]").should == "<em>!testing...!</em>"
+		Glyph::Macro.new({}).render(:em_with_rep, :value => "test").should == "<em>!test!</em>"
+	end
+
+	it "should perform dispatching" do
+		Glyph.macro :dispatcher do
+			dispatch do |node|
+				"dispatched: #{node[:name]}" if node[:name] == :em
+			end
+		end
+		Glyph.macro :another_macro do
+			"...#{value}"
+		end
+		define_em_macro
+		output_for("dispatcher[em[test]]").should == "dispatched: em"
+		output_for("dispatcher[em[@attr[test]]]").should == "dispatched: em"
+		output_for("dispatcher[...|em[@attr[test]]]").should == "..." # Dispatcher macros should only take one parameter
+		output_for("dispatcher[another_macro[test]]").should == "...test"
+		output_for("dispatcher[another_macro[another_macro[test]]]").should == "......test"
+	end
+
+	it "should apply text with placeholders to macro data" do
+		Glyph.macro :data do
+			apply "{{1}} {{a}} {{0}}" 
+		end
+		output_for("data[@a[is]a test|This]").should == "This is a test"
 	end
 
 end

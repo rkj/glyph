@@ -9,32 +9,30 @@ module Glyph
 	# as well as replacing placeholders.
 	class Document
 
-		ESCAPES = [
-			['\\]', ']'], 
-			['\\[', '['],
-			['\\=', '='],
-			['\\.', ''],
-			['\\\\', '\\'],
-			['\\|', '|']
-		]
+		ESCAPES = /\\([\\\]\[\|.=])/
 
-		attr_reader :bookmarks, :placeholders, :headers, :context, :errors, :todos
+		attr_reader :bookmarks, :placeholders, :headers, :styles, :context, :errors, :todos, :topics, :links, :toc, :fragments
 
 		# Creates a new document
 		# @param [GlyphSyntaxNode] tree the syntax tree to be evaluate
 		# @param [Glyph::Node] context the context associated with the tree
 		# @raise [RuntimeError] unless tree responds to :evaluate
-		def initialize(tree, context)
+		def initialize(tree, context={})
 			@tree = tree
 			@context = context
-			@bookmarks = {}
+			@context[:source] ||= {:file => nil, :name => '--', :topic => nil}
 			@placeholders = {}
-			@headers = []
+			@bookmarks = {}
+			@headers = {}
+			@fragments = {}
+			@styles = []
 			@errors = []
 			@todos = []
+			@topics = []
+			@links = []
+			@toc = {}
 			@state = :new
 		end
-
 
 		# Returns a tree of Glyph::Node objects corresponding to the analyzed document
 		# @raise [RuntimeError] unless the document has been analized
@@ -43,13 +41,23 @@ module Glyph
 			@tree
 		end
 
-		# Copies bookmarks, headers, todos and placeholders from another Glyph::Document
+		# Copies bookmarks, headers, todos, styles and placeholders from another Glyph::Document
 		# @param [Glyph::Document] document a valid Glyph::Document
-		def inherit_from(document)
-			@bookmarks = document.bookmarks
-			@headers = document.headers
-			@todos = document.todos
-			@placeholders = document.placeholders
+		# @param [Hash] data specifies which data will be inherited (e.g. bookmarks, headers, ...).
+		# 	By default, all data is inherited.
+		# @example Inheriting everything except topics
+		# 	doc1.inherit_from doc2, :topics => false 
+		def inherit_from(document, data={})
+			@bookmarks = document.bookmarks unless data[:bookmarks] == false
+			@headers = document.headers unless data[:headers] == false
+			@todos = document.todos unless data[:todos] == false
+			@styles = document.styles unless data[:styles] == false
+			@topics = document.topics unless data[:topics] == false
+			@placeholders = document.placeholders unless data[:placeholders] == false
+			@toc = document.toc unless data[:toc] == false
+			@links = document.links unless data[:links] == false
+			@fragments = document.fragments unless data[:fragments] == false
+			self
 		end
 
 		# Defines a placeholder block that will be evaluated after the whole document has been analyzed
@@ -63,34 +71,51 @@ module Glyph
 
 		# Returns a stored bookmark or nil
 		# @param [#to_sym] key the bookmark identifier
-		# @return [Hash, nil] the bookmark hash or nil if no bookmark is found
+		# @return [Glyph::Bookmark, nil] the bookmark or nil if no bookmark is found
 		def bookmark?(key)
 			@bookmarks[key.to_sym]
 		end
 
 		# Stores a new bookmark
-		# @param [Hash] hash the bookmark hash: {:id => "Bookmark ID", :title => "Bookmark Title"}
-		# @return [Hash] the stored bookmark (:id is converted to a symbol)
+		# @param [Hash] hash the bookmark hash: {:id => "BookmarkID", :title => "Bookmark Title", :file => "dir/preface.glyph"}
+		# @return [Glyph::Bookmark] the stored bookmark
+		# @raise [RuntimeError] if the bookmark is already defined.
 		def bookmark(hash)
-			ident = hash[:id].to_sym
-			hash[:id] = ident
-			@bookmarks[ident] = hash
-			hash
+			b = Glyph::Bookmark.new(hash)
+			raise RuntimeError, "Bookmark '#{b.code}' already exists" if @bookmarks.has_key? b.code
+			@bookmarks[b.code] = b
+			b
 		end
 
 		# Stores a new header
-		# @param [Hash] hash the header hash: {:id => "Bookmark ID", :title => "Bookmark Title", :level => 3}
-		# @return [Hash] the stored header
+		# @param [Hash] hash the header hash: {:id => "Bookmark_ID", :title => "Bookmark Title", :level => 3}
+		# @return [Glyph::Header] the stored header
+		# @raise [RuntimeError] if the bookmark is already defined.
 		def header(hash)
-			@headers << hash
-			hash
+			b = Glyph::Header.new(hash)
+			raise RuntimeError, "Bookmark '#{b.code}' already exists" if @bookmarks.has_key? b.code
+			@bookmarks[b.code] = b
+			@headers[b.code] = b
+			b
 		end
 
 		# Returns a stored header or nil
-		# @param [String] key the header identifier
-		# @return [Hash, nil] the header hash or nil if no header is found
+		# @param [String, Symbol] key the header identifier
+		# @return [Glyph::Header, nil] the header or nil if no header is found
 		def header?(key)
-			@headers.select{|h| h[:id] == key}[0] rescue nil
+			@headers[key.to_sym]
+		end
+
+		# @since 0.4.0
+		# Stores a stylesheet
+		# @param [String] file the stylesheet file
+		# @raises [RuntimeError] if the stylesheet is already specified for the document (unless the output has more than one file)
+		def style(file)
+			f = Pathname.new file
+			if @styles.include?(f) && !Glyph.multiple_output_files? then
+				raise RuntimeError, "Stylesheet '#{f}' already specified for the current document" 
+			end
+			@styles << f
 		end
 
 		# Analyzes the document by evaluating its @tree
@@ -113,19 +138,26 @@ module Glyph
 			return (@state = :finalized) if @context[:embedded]
 			raise RuntimeError, "Document cannot be finalized due to previous errors" unless @context[:document].errors.blank?
 			# Substitute placeholders
-			ESCAPES.each{|e| @output.gsub! e[0], e[1]}
-			begin
-				@placeholders.each_pair do |key, value| 
-					begin
-						@output.gsub! key.to_s, value.call(self).to_s
-					rescue Glyph::MacroError => e
-						e.macro.macro_warning e.message, e
-					rescue Exception => e
-						puts e.class
-						Glyph.warning e.message
+			@placeholders.each_pair do |key, value| 
+				begin
+					key_s = key.to_s
+					value_s = value.call(self).to_s
+					toc[:contents].gsub! key_s, value_s rescue nil
+					@topics.each do |t|
+						t[:contents].gsub! key_s, value_s
 					end
+					@output.gsub! key_s, value_s
+				rescue Glyph::MacroError => e
+					e.macro.macro_warning e.message, e
+				rescue Exception => e
+					Glyph.warning e.message
 				end
-			rescue Exception => e
+			end
+			# Substitute escape sequences
+			@output.gsub!(ESCAPES) { |match| ($1 == '.') ? '' : $1 }
+			toc[:contents].gsub!(ESCAPES) { |match| ($1 == '.') ? '' : $1 } rescue nil
+			@topics.each do |t|
+				t[:contents].gsub!(ESCAPES) { |match| ($1 == '.') ? '' : $1 }
 			end
 			@state = :finalized
 		end

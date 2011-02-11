@@ -1,5 +1,4 @@
 #!/usr/bin/env ruby
-require File.join(File.dirname(__FILE__), "..", "spec_helper")
 
 describe Glyph do
 
@@ -39,7 +38,7 @@ describe Glyph do
 		lambda { Glyph.macro_alias("->" => :ref)}.should_not raise_error
 		Glyph::MACROS[:"->"].should == Glyph::MACROS[:ref]
 		Glyph.macro_alias :em => :ref
-		Glyph::MACROS[:em].should_not == Glyph::MACROS[:ref]
+		Glyph::MACROS[:em].should == Glyph::MACROS[:ref]
 	end
 
 	it "should provide a filter method to convert raw text into HTML" do
@@ -69,8 +68,48 @@ describe Glyph do
 		lambda { output_for("include[test.glyph]")}.should raise_error Glyph::MacroError
 		lambda {output_for("config:[test|true]")}.should raise_error Glyph::MacroError
 		lambda { output_for("ruby[Time.now]")}.should raise_error Glyph::MacroError
-		lambda { output_for("rw:[a|section[{{0}}]]")}.should raise_error Glyph::MacroError
+		lambda { output_for("def:[a|section[{{0}}]]")}.should raise_error Glyph::MacroError
 		Glyph.safe_mode = false
+	end
+
+	it "should define macros using Glyph syntax" do
+		define_em_macro
+		Glyph.define :test_def_macro, %{em[{{0}} -- {{a}}]}
+		output_for("test_def_macro[@a[!]?]").should == "<em>? -- !</em>"
+	end
+
+	it "should store alias information" do
+		delete_project_dir
+		create_project_dir
+		Glyph.run! 'project:create', Glyph::PROJECT
+		Glyph.run 'load:all'
+		Glyph::ALIASES[:by_def][:snippet].should == [:&]
+		Glyph::ALIASES[:by_alias][:"?"].should == :condition
+		Glyph.macro_aliases_for(:link).should == [:"=>"]
+		Glyph.macro_aliases_for(:"=>").should == nil
+		Glyph.macro_definition_for(:"=>").should == :link
+		Glyph.macro_definition_for(:link).should == nil
+		Glyph.macro_alias?(:"#").should == true
+	end
+
+	it "should store macro representations" do
+		delete_project_dir
+		create_project_dir
+		Glyph.macro :test_rep do
+		end
+		Glyph.macro_alias :test_rep_alias  => :test_rep
+		Glyph.rep :test_rep do |data|
+			"TEST - #{data[:a]}"
+		end
+		Glyph::REPS[:test_rep].call(:a => 1).should == "TEST - 1" 
+		Glyph::REPS[:test_rep_alias].call(:a => 1).should == "TEST - 1" 
+	end
+
+	it "should load reps for a given output" do
+		Glyph.reps_for(:html)
+		Glyph::REPS[:section].should_not be_blank
+		Glyph::REPS[:link].should_not be_blank
+		Glyph::REPS[:"=>"].should_not be_blank
 	end
 
 end

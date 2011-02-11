@@ -23,7 +23,7 @@ describe "glyph" do
 	it "[config] should read configuration settings" do
 		create_project
 		run_command_successfully(["config", "-g"]).should == false
-		run_command(["config", "filters.target"]).match(/html/m).should_not == nil
+		run_command(["config", "document.output"]).match(/html/m).should_not == nil
 	end
 
 	it "[config] should write configuration settings" do
@@ -41,7 +41,6 @@ describe "glyph" do
 		Glyph::PROJECT_CONFIG.get('another.test').should_not == "something else"
 		Glyph::GLOBAL_CONFIG.read
 		Glyph::GLOBAL_CONFIG.get('another.test').should == "something else"
-		run_command_successfully(["config", "-g", "yet.another.test", "something else", "extra argument"]).should == false
 		(Glyph::SPEC_DIR/'.glyphrc').unlink
 	end
 
@@ -153,7 +152,7 @@ describe "glyph" do
 		out = Glyph::PROJECT/'article.pdf'
 		generate_pdf = lambda do |gen|
 			Glyph.enable 'generate:pdf'
-			Glyph['tools.pdf_generator'] = gen
+			Glyph['output.pdf.generator'] = gen
 			run_command_successfully(["compile", "article.glyph"]).should == true
 			src.exist?.should == true
 			out.exist?.should == true
@@ -184,8 +183,7 @@ describe "glyph" do
 		out = file_load Glyph::PROJECT/'output/html/test_project.html'
 		out.should == %{<div class="section">
 <h2 id="h_1">Test</h2>
-<span class="todo"><span class="todo-pre"><strong>TODO:</strong> </span>Correct errors in file 'errors.glyph'</span>
-<span class="todo"><span class="todo-pre"><strong>TODO:</strong> </span>Correct errors in file 'syntax_error.glyph'</span>
+
 
 </div>}
 		res.match("error: #{err}").should == nil
@@ -206,7 +204,7 @@ test_project - Outline
 		i_id = "[#h_2]"
 		m_id = "[#md]"
 		file_write Glyph::PROJECT/'document.glyph', "document[#{file_load(Glyph::PROJECT/'document.glyph')}]"
-		run_command(["outline"]).should == %{#{start}
+		run_command(["-d", "outline"]).should == %{#{start}
   #{c_title}
     #{i_title}
   #{m_title}
@@ -225,6 +223,23 @@ test_project - Outline
 #{m_file}
   #{m_title}#{m_id}
 }
+	end
+
+	it "[stats] should display project statistics" do
+		reset_quiet
+		create_project
+		out = run_command(["stats", "-ms"])
+		total_macros = (Glyph::MACROS.keys - Glyph::ALIASES[:by_alias].keys).uniq.length
+		out.should match "-- Total Macro Definitions: #{total_macros}" 
+		out.should match "-- Unused Snippets: test"
+		out = run_command(["stats"])
+		out.should match "-- Total Macro Definitions: #{total_macros}" 
+		out.should_not match "-- Unused Snippets: test"
+		out.should match "-- Total Unreferenced Bookmarks: 3"
+		out = run_command(["stats", "-lb", "--bookmark=md"])
+		out.should match "-- Unreferenced Bookmarks: h_1, h_2, md" 
+		out.should match "-- Defined in: text/a/b/c/markdown.markdown"
+		out.should_not match "-- Total Macro Definitions: 19"
 	end
 
 end

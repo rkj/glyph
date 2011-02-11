@@ -1,0 +1,16 @@
+document[
+	head[
+		style[default.css]
+	]
+	body[
+		@class[topic]
+		halftitlepage[
+			title[]
+			subtitle[]
+			author[]
+		]
+		frontmatter[
+			toc[]
+		]
+	]
+]
