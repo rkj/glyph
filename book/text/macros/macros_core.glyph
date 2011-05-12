@@ -23,7 +23,7 @@ Evaluates to nothing. Used to add comments in a Glyph document that will not be 
 		]
 		@aliases[--]
 		@params[-p[0|The contents to comment out]]
-		@example[=--[\.=>[#link\|This link will not be evaluated]]=]
+		@example[=--[\/=>[#link\|This link will not be evaluated]]=]
 		@remarks[Macros are not expanded within comments.]
 	]
 

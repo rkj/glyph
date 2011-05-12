@@ -1,4 +1,6 @@
 #!/usr/bin/env ruby
+# encoding: utf-8
+
 require File.join(File.dirname(__FILE__), "..", "spec_helper")
 require 'glyph/commands'
 
@@ -22,7 +24,7 @@ describe "glyph" do
 
 	it "[config] should read configuration settings" do
 		create_project
-		run_command_successfully(["config", "-g"]).should == false
+		run_command_with_status(["config", "-g"]).should == -10
 		run_command(["config", "document.output"]).match(/html/m).should_not == nil
 	end
 
@@ -142,16 +144,17 @@ describe "glyph" do
 		Pathname.new('article.html').exist?.should == true
 		file_load('article.html').gsub(/\t|\n/, '').should == %{
 			<div class="section">
-				Test -- Test Snippet
+				改善 Test -- Test Snippet
 			</div>
 		}.gsub(/\t|\n/, '')
-		Glyph.enable 'generate:html'
 		(Glyph::PROJECT/'article.html').unlink
 		Glyph['document.output'] = 'pdf'
 		src = Glyph::PROJECT/'article.html'
 		out = Glyph::PROJECT/'article.pdf'
 		generate_pdf = lambda do |gen|
+			Glyph.enable 'generate:html'
 			Glyph.enable 'generate:pdf'
+			Glyph.enable 'generate:pdf_through_html'
 			Glyph['output.pdf.generator'] = gen
 			run_command_successfully(["compile", "article.glyph"]).should == true
 			src.exist?.should == true
@@ -231,10 +234,8 @@ test_project - Outline
 		out = run_command(["stats", "-ms"])
 		total_macros = (Glyph::MACROS.keys - Glyph::ALIASES[:by_alias].keys).uniq.length
 		out.should match "-- Total Macro Definitions: #{total_macros}" 
-		out.should match "-- Unused Snippets: test"
 		out = run_command(["stats"])
 		out.should match "-- Total Macro Definitions: #{total_macros}" 
-		out.should_not match "-- Unused Snippets: test"
 		out.should match "-- Total Unreferenced Bookmarks: 3"
 		out = run_command(["stats", "-lb", "--bookmark=md"])
 		out.should match "-- Unreferenced Bookmarks: h_1, h_2, md" 

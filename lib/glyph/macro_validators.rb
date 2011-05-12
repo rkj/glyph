@@ -121,7 +121,7 @@ module Glyph
 				macro_error "Macro '#@name' cannot be used in safe mode" if Glyph.safe?
 			end
 
-			# Ensure that no mutual inclusion occurs within the specified parameter or attribute
+			# Ensures that no mutual inclusion occurs within the specified parameter or attribute
 			# @param [Fixnum, Symbol] the parameter index or attribute name to check
 			# @raise [Glyph::MacroError] mutual inclusion was detected
 			# @since 0.3.0
@@ -149,7 +149,7 @@ module Glyph
 				end
 			end
 
-			# Ensure that the macros is within another
+			# Ensures that the macros is within another
 			# @param [String, Symbol] arg the name of the container macro
 			# @param [Hash] options a hash containing validation options
 			# @option options :level the error level (:error, :warning)
@@ -161,7 +161,7 @@ module Glyph
 				end
 			end
 
-			# Ensure that the macros is _not_ within another
+			# Ensures that the macros is _not_ within another
 			# @param [String, Symbol] arg the name of the container macro
 			# @param [Hash] options a hash containing validation options
 			# @option options :level the error level (:error, :warning)
@@ -170,13 +170,6 @@ module Glyph
 			def not_within(arg, options={:level => :error})
 				validate("Macro '#{@name}' must not be within a '#{arg}' macro", options) do 
 					!@node.find_parent {|n| Glyph.macro_eq? arg.to_sym, n[:name]}
-				end
-			end
-
-			# TODO: docs
-			def quoted_parameter(position, options={:level => :error})
-				validate("Macro '#{@name}' requires a quoted macro at position #{position}", options) do
-					(@node&(position)).find_child {|n| n[:name] && Glyph.macro_eq?(n[:name], :quote)}
 				end
 			end
 

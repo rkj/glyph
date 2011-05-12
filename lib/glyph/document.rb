@@ -9,9 +9,10 @@ module Glyph
 	# as well as replacing placeholders.
 	class Document
 
-		ESCAPES = /\\([\\\]\[\|.=])/
+		ESCAPES = /\\([\\\]\[\|\/=])/
 
-		attr_reader :bookmarks, :placeholders, :headers, :styles, :context, :errors, :todos, :topics, :links, :toc, :fragments
+		attr_reader :bookmarks, :placeholders, :headers, :styles, :context
+		attr_reader :errors, :todos, :topics, :links, :toc, :fragments, :snippets
 
 		# Creates a new document
 		# @param [GlyphSyntaxNode] tree the syntax tree to be evaluate
@@ -24,6 +25,7 @@ module Glyph
 			@placeholders = {}
 			@bookmarks = {}
 			@headers = {}
+			@snippets = {}
 			@fragments = {}
 			@styles = []
 			@errors = []
@@ -50,6 +52,7 @@ module Glyph
 		def inherit_from(document, data={})
 			@bookmarks = document.bookmarks unless data[:bookmarks] == false
 			@headers = document.headers unless data[:headers] == false
+			@snippets = document.snippets unless data[:snippets] == false
 			@todos = document.todos unless data[:todos] == false
 			@styles = document.styles unless data[:styles] == false
 			@topics = document.topics unless data[:topics] == false
@@ -106,6 +109,23 @@ module Glyph
 			@headers[key.to_sym]
 		end
 
+		# Stores a new snippet
+		# @param [Symbol, String] key the snippet identifier
+		# @param [string] value the snippet contents
+		# @return [String] the stored snippet
+		# @since 0.5.0
+		def snippet(key, value)
+			@snippets[key.to_sym] = value
+		end
+
+		# Returns a stored snippet or nil
+		# @param [String, Symbol] key the snippet identifier
+		# @return [String, nil] the snippet contents or nil if no snippet is found
+		# @since 0.5.0
+		def snippet?(key)
+			@snippets[key.to_sym]
+		end
+
 		# @since 0.4.0
 		# Stores a stylesheet
 		# @param [String] file the stylesheet file
@@ -154,10 +174,10 @@ module Glyph
 				end
 			end
 			# Substitute escape sequences
-			@output.gsub!(ESCAPES) { |match| ($1 == '.') ? '' : $1 }
-			toc[:contents].gsub!(ESCAPES) { |match| ($1 == '.') ? '' : $1 } rescue nil
+			@output.gsub!(ESCAPES) { |match| ($1 == '/') ? '' : $1 }
+			toc[:contents].gsub!(ESCAPES) { |match| ($1 == '/') ? '' : $1 } rescue nil
 			@topics.each do |t|
-				t[:contents].gsub!(ESCAPES) { |match| ($1 == '.') ? '' : $1 }
+				t[:contents].gsub!(ESCAPES) { |match| ($1 == '/') ? '' : $1 }
 			end
 			@state = :finalized
 		end

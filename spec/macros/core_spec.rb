@@ -1,4 +1,5 @@
 #!/usr/bin/env ruby
+# encoding: utf-8
 
 describe "Macro:" do
 
@@ -14,26 +15,22 @@ describe "Macro:" do
 
 	it "snippet" do
 		define_em_macro
-		interpret "Testing a snippet: &[test]."
+		interpret "&:[test|This is a \nTest snippet]Testing a snippet: &[test]."
 		@p.document.output.should == "Testing a snippet: This is a \nTest snippet."
 		interpret("Testing &[wrong].")
 		@p.document.output.should == "Testing [SNIPPET 'wrong' NOT PROCESSED]." 
-		Glyph::SNIPPETS[:a] = "this is a em[test] &[b]"
-		Glyph::SNIPPETS[:b] = "and another em[test]"
-		text = "TEST: &[a]"
+		text = "&:[b|and another em[test]]&:[a|this is a em[test] &[b]]TEST: &[a]"
 		interpret text
 		@p.document.output.should == "TEST: this is a <em>test</em> and another <em>test</em>"
 		# Check snippets with links
-		Glyph::SNIPPETS[:c] = "This is a link to something afterwards: =>[#other]"
-		text = "Test. &[c]. #[other|Test]."
+		text = "&:[c|This is a link to something afterwards: =>[#other]]Test. &[c]. #[other|Test]."
 		output_for(text).should == %{Test. This is a link to something afterwards: <a href="#other">Test</a>. <a id="other">Test</a>.}
 	end
 
 	it "snippet:" do
 		interpret("&[t1] - &:[t1|Test #1] - &[t1]")
 		@p.document.output.should == "[SNIPPET 't1' NOT PROCESSED] -  - Test #1"
-		Glyph::SNIPPETS[:t1].should == "Test #1"
-		Glyph::SNIPPETS.delete :t1
+		@p.document.snippet?(:t1).should == "Test #1"
 	end
 
 	it "condition" do
@@ -118,7 +115,7 @@ This is a test.
 	it "include should assume .glyph as the default extension" do
 		file_copy Glyph::SPEC_DIR/'files/article.glyph', Glyph::PROJECT/'text/article.glyph'
 		output_for("include[article]").gsub(/\n|\t/, '').should == %{<div class="section">
-Test -- Test Snippet
+改善 Test -- Test Snippet
 
 </div>}.gsub(/\n|\t/, '')
 	end
@@ -131,6 +128,16 @@ Test -- Test Snippet
 		}
 		file_write Glyph::PROJECT/"lib/test.rb", text
 		output_for("include[test.rb]day[]").should == Time.now.day.to_s	
+	end
+
+	it "load" do
+		text1 = %{section[@title[...]]}
+		text2 = %{Time.now.day}
+		file_write Glyph::PROJECT/"test1.glyph", text1
+		file_write Glyph::PROJECT/"test2.rb", text2
+		output_for("load[test/test1.glyph]").should == "[FILE 'test/test1.glyph' NOT FOUND]"
+		output_for("load[test1.glyph]").should == text1
+		output_for("load[test2.rb]").should == text2
 	end
 
 
@@ -182,7 +189,7 @@ Test -- Test Snippet
 
 	it "define:" do
 		define_em_macro
-		interpret("def:[def_test|em[{{0}}\\.em[{{a}}]]]").process
+		interpret("def:[def_test|em[{{0}}\\/em[{{a}}]]]").process
 		output_for("def_test[test @a[em[A!]]]").should == "<em>test<em><em>A!</em></em></em>"
 		output_for("def_test[]").should == "<em><em></em></em>"
 	end
@@ -315,69 +322,6 @@ Test -- Test Snippet
 			]
 		}
 		output_for(text).strip.should == "-test-test-test-test-test-"
-	end
-
-	it "apply" do
-		define_em_macro
-		lambda { output_for("apply[]") }.should raise_error
-		lambda { output_for("apply[a|b|c]") }.should raise_error
-		lambda { output_for("apply[a|b]") }.should raise_error
-		lambda { output_for("apply[em[a]|b]")}.should raise_error
-		output_for("apply['[em[a]]|b]").should == "'[b]"
-		output_for("apply['[a]|-{{0}}-]").should == "'[-a-]"
-		output_for("apply['[.[@test[1]2|3]]|{{1}}-{{0}}-{{test}}]").should == "'[3-2-1]"
-		output_for("map['[.[@a[a1]1+]|.[@a[a2]]|.[3+]]|{{0}}%{{a}}]").should == "'[1+%a1|%a2|3+%]"
-	end
-
-	it "quote and unquote" do
-		define_em_macro
-		output_for("quote[em[test]]").should == "quote[em[test]]"
-		output_for("'[em[a]|em[b]]").should == "'[em[a]|em[b]]"
-		output_for("unquote[quote[em[test]]]").should == "<em>test</em>"
-		output_for("~[quote[em[a]|em[b]]]").should == "<em>a</em><em>b</em>"
-		output_for("~['['[em[test]]]]").should == "'[em[test]]"
-		lambda { output_for("unquote[...|...]")}.should raise_error
-		output_for("unquote[...]").should == "..."
-	end
-
-	it "reverse, length" do
-		lambda { output_for("reverse[.|.]") }.should raise_error
-		lambda { output_for("reverse[.]")}.should raise_error
-		output_for("reverse['[1|2|3]]").should == "'[3|2|1]"
-		lambda { output_for("length[.|.]") }.should raise_error
-		lambda { output_for("length[.]")}.should raise_error
-		output_for("length['[]]").should == "0"
-		output_for("length['[.]]").should == "1"
-		output_for("length['[.|.]]").should == "2"
-	end
-
-	it "get" do
-		define_em_macro
-		lambda { output_for("get[]")}.should raise_error
-		lambda { output_for("get[.|.]")}.should raise_error
-		output_for("get['[1]|.]").should == "1"
-		output_for("get['[1|2|3]|1]").should == "2"
-		output_for("get['[1|2|em[3]]|2]").should == "<em>3</em>"
-		output_for("get['[1]|4]").should == ""
-	end
-
-	it "sort" do
-		lambda { output_for("sort[]")}.should raise_error
-		lambda { output_for("sort[1|2]")}.should raise_error
-		output_for("sort['[5|1|4|2|3|6]]").should == "'[1|2|3|4|5|6]"
-		q = "'[.[@a[3]] | .[@a[1]@b[2]] | .[@a[2]1|2|3]]"
-		output_for("sort[#{q}|a]").should == "'[ .[@a[1]@b[2]] | .[@a[2]1|2|3]|.[@a[3]] ]" 
-		output_for("reverse[sort[#{q}|a]]").should == "'[.[@a[3]] | .[@a[2]1|2|3]| .[@a[1]@b[2]] ]" 
-	end
-
-	it "select" do
-		lambda { output_for("select[]") }.should raise_error
-		lambda { output_for("select[1|2]") }.should raise_error
-		output_for("select['[1|2|2|3]|gte[{{0}}|2]]").should == "'[2|2|3]"
-		q = "'[ .[@a[1]a|b] | .[@b[1]a] | .[@b[1]@a[2]a|b|c] ]"
-		output_for("select[#{q}|{{a}}]").should == "'[.[@a[1]a|b]|.[@b[1]@a[2]a|b|c]]"
-		output_for("select[#{q}|or[{{a}}|{{b}}]]").should == "'[.[@a[1]a|b]|.[@b[1]a]|.[@b[1]@a[2]a|b|c]]"
-		output_for("filter[#{q}|{{1}}]").should == "'[.[@a[1]a|b]|.[@b[1]@a[2]a|b|c]]"
 	end
 
 	it "fragment" do

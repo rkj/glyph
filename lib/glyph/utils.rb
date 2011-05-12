@@ -53,7 +53,7 @@ module Glyph
 		# @return [String] the contents of the file
 		def file_load(file)
 			result = ""
-			File.open(file.to_s, 'r') do |f|
+			File.open(file.to_s, 'r:utf-8') do |f|
 				while l = f.gets 
 					result << l
 				end
@@ -66,7 +66,7 @@ module Glyph
 		# @param [String] contents the string to write
 		# @return [String] the string written to the file
 		def file_write(file, contents="")
-			File.open(file.to_s, 'w+') do |f|
+			File.open(file.to_s, 'w+:utf-8') do |f|
 				f.print contents
 			end
 			contents
@@ -98,7 +98,7 @@ module Glyph
                 # @yield [src, dest] the source file and the corresponding output file
 		# @since 0.4.0
 		def with_files_from(dir, &block)
-			output = (Glyph['document.output'] == 'pdf') ? 'html' : Glyph['document.output']
+			output =  complex_output? ? 'tmp' : Glyph['document.output']
 			dir_path = Glyph::PROJECT/"output/#{output}/#{dir}"
 			dir_path.mkpath
 			(Glyph::PROJECT/dir).find do |i|
@@ -109,6 +109,13 @@ module Glyph
 					block.call src, dest
 				end
 			end
+		end
+
+		# Returns true if Glyph['document.output'] requires two or more conversions
+		# @since 0.5.0
+		def complex_output?
+			out = Glyph['document.output']
+			!Glyph["output.#{out}.generator"].blank? || !Glyph["output.#{out}.through"].blank?
 		end
 
 		# Returns true if the macro name is used as an alias
@@ -147,7 +154,7 @@ module Glyph
 
 		# Returns true if the PROJECT constant is set to a valid Glyph project directory
 		def project?
-			children = ["text", "snippets.yml", "config.yml", "document.glyph"].sort
+			children = ["text", "config.yml", "document.glyph"].sort
 			actual_children = PROJECT.children.map{|c| c.basename.to_s}.sort 
 			(actual_children & children) == children
 		end
@@ -155,6 +162,17 @@ module Glyph
 		# Returns true if multiple output files are being generated
 		def multiple_output_files?
 			Glyph["output.#{Glyph['document.output']}.multifile"]
+		end
+
+		# Execute an external command
+		# @since 0.5.0
+		def run_external_command(cmd)
+			IO.popen(cmd+" 2>&1") do |pipe|
+				pipe.sync = true
+				while str = pipe.gets do
+					puts str
+				end
+			end
 		end
 
 	end

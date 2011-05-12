@@ -2,12 +2,11 @@
 # encoding: utf-8
 
 macro :snippet do
-	no_mutual_inclusion_in 0	
 	ident = value.to_sym
-	if Glyph::SNIPPETS.has_key? ident then
+	if snippet? ident then
 		begin
 			update_source "snippet[#{ident}]"
-			interpret Glyph::SNIPPETS[ident] 
+			interpret snippet?(ident) 
 		rescue Exception => e
 			case 
 			when e.is_a?(Glyph::MutualInclusionError) then
@@ -28,7 +27,7 @@ macro "snippet:" do
 	exact_parameters 2
 	ident = param(0)
 	text = param(1)
-	Glyph::SNIPPETS[ident.to_sym] = text
+	snippet ident, text
 	""
 end
 
@@ -41,6 +40,19 @@ macro "macro:" do
 		instance_eval code
 	end
 	""
+end
+
+macro :load do
+	safety_check
+	exact_parameters 1
+	file = param 0 
+	path = Glyph::PROJECT/file
+	if path.exist? then
+		file_load path
+	else
+		macro_warning "File '#{file}' no found."
+		"[FILE '#{value}' NOT FOUND]"
+	end
 end
 
 macro :include do
@@ -293,105 +305,6 @@ macro :while do
 	end
 end
 
-macro :quote do
-	"#@name[#{@node.contents}]"
-end
-
-macro :unquote do
-	exact_parameters 1
-	content = parse_quoted_string value
-	content.respond_to?(:parameters) ? Glyph::Macro.new(content).parameters.join : content[:value]
-end
-
-macro :apply do
-	exact_parameters 2
-	quoted_parameter 0
-	quote = parse_quoted_string value
-	result = []
-	Glyph::Macro.new(quote).node.parameters.each do |p|
-		content = p.children.select{ |c| c.respond_to?(:parameters) || !c[:value].to_s.strip.blank?}[0]
-		if content.respond_to? :parameters then
-			# macro node
-			result << Glyph::Macro.new(content).apply(parameter(1))
-		else
-			# text node
-			result << interpret(raw_parameter(1).to_s.gsub(/\{\{0}\}/, content[:value]).gsub(/\{\{.+?\}\}/, ''))
-		end
-	end
-	result = [""] if result.all?{|i| i.blank?}
-	"'[#{result.join("|")}]"
-end
-
-macro :reverse do
-	exact_parameters 1
-	quoted_parameter 0
-	quote = parse_quoted_string value
-	"'[#{quote.parameters.reverse.map{|p| p.contents}.join("|")}]"
-end
-
-macro :length do
-	exact_parameters 1
-	quoted_parameter 0
-	quote = parse_quoted_string value
-	quote.parameters.length.to_s
-end
-
-macro :get do
-	exact_parameters 2
-	quoted_parameter 0
-	quote = parse_quoted_string value
-	interpret quote.parameter(parameter(1).to_i).to_s rescue "" 
-end
-
-macro :sort do
-	max_parameters 2
-	quoted_parameter 0
-	sort_by = parameter 1 rescue nil
-	if sort_by.blank? || sort_by.match(/^\d+$/) then
-		param_sort = sort_by.to_i
-	else
-		attr_sort = sort_by
-	end
-	quote = parse_quoted_string value
-	sorted_parameters = quote.parameters.sort_by do |p|
-		content = p.children.select{ |c| c.respond_to?(:parameters) || !c[:value].to_s.strip.blank?}[0]
-		if content.respond_to? :parameters then
-			# macro node
-			if param_sort then
-				Glyph::Macro.new(content).parameter(param_sort).to_s
-			else
-				Glyph::Macro.new(content).attribute(attr_sort.to_sym).to_s
-			end
-		else
-			# text node
-			content[:value]
-		end
-	end
-	"'[#{sorted_parameters.map{|p| p.to_s}.join("|")}]"
-end
-
-
-macro :select do
-	exact_parameters 2
-	quoted_parameter 0
-	quote = parse_quoted_string value
-	result = []
-	Glyph::Macro.new(quote).node.parameters.each do |p|
-		content = p.children.select{ |c| c.respond_to?(:parameters) || !c[:value].to_s.strip.blank?}[0]
-		if content.respond_to? :parameters then
-			# macro node
-			selected = Glyph::Macro.new(content).apply(parameter(1))
-		else
-			# text node
-			selected = interpret raw_parameter(1).to_s.gsub(/\{\{0}\}/, content[:value]).gsub(/\{\{.+?\}\}/, '') 
-		end
-		result << content unless selected.blank? || selected == "false"
-	end
-	result = [""] if result.all?{|i| i.blank?}
-	"'[#{result.map{|p| p.to_s}.join("|")}]"
-end
-
-
 macro :fragment do
 	exact_parameters 2
 	ident, contents = param(0).to_sym, param(1)
@@ -417,10 +330,6 @@ macro_alias '%' => :ruby
 macro_alias '$' => :config
 macro_alias '$:' => 'config:'
 macro_alias '.' => :escape
-macro_alias "'" => :quote
-macro_alias "~" => :unquote
-macro_alias :map => :apply
-macro_alias :filter => :select
 macro_alias '?' => :condition
 macro_alias 'def:' => 'define:'
 macro_alias '@' => :attribute

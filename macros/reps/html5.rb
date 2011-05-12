@@ -20,8 +20,9 @@ end
 # Block
 
 rep :note do |data|
-	%{<aside class="#{data[:name]}">
-<span class="note-title">#{data[:name].capitalize}</span>#{data[:text]}
+	css_class = data[:name].to_s.match(/[a-z0-9_-]/i) ? data[:name] : "note"
+	%{<aside class="#{css_class}">
+<span class="note-title">#{data[:name].to_s.capitalize}</span>#{data[:text]}
 
 </aside>}
 end
@@ -34,12 +35,8 @@ rep :box do |data|
 </aside>}
 end
 
-# TODO: change fallback
 rep :figure do |data|
-	interpret %{xml/figure[
-xml/img[@src[#{data[:src]}]#{data[:attrs].join}]
-					xml/figcaption[#{data[:caption]}]
-]}
+	interpret %{xml/figure[#{data[:attrs].join}\\/xml/img[@src[#{data[:src]}]]xml/figcaption[#{data[:caption]}]]}
 end
 
 rep :title do |data|
@@ -94,8 +91,9 @@ rep :toc do |data|
 end
 
 rep :section do |data|
+	css_class = data[:name].to_s.match(/[a-z0-9_-]/i) ? data[:name] : "section"
 	title = data[:title] ? %{<header><h1 id="#{data[:id]}">#{data[:title]}</h1></header>\n} : ""
-	%{<section class="#{data[:name]}">
+	%{<section class="#{css_class}">
 #{title}#{data[:content]}
 
 </section>}	

@@ -49,15 +49,18 @@ describe Glyph do
 	it "should provide a compile method to compile files in lite mode" do
 		reset_quiet
 		file_copy Glyph::PROJECT/'../files/article.glyph', Glyph::PROJECT/'article.glyph'
-		lambda { Glyph.compile Glyph::PROJECT/'article.glyph' }.should_not raise_error
+		#lambda { 
+			Glyph.debug_mode = true
+			Glyph.compile Glyph::PROJECT/'article.glyph' 
+		#}.should_not raise_error
 		(Glyph::PROJECT/'article.html').exist?.should == true
 	end
 
-	it "should provide a reset method to remove config overrides, reenable tasks, clear macros and snippets." do
+	it "should provide a reset method to remove config overrides, reenable tasks, clear macros and reps" do
 		Glyph['test_setting'] = true
 		Glyph.reset
-		Glyph::SNIPPETS.length.should == 0
 		Glyph::MACROS.length.should == 0
+		Glyph::REPS.length.should == 0
 		Glyph['test_setting'].should == nil
 	end
 
